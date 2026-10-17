@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en" data-default-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Дрейф контракта Petstore</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: two documents side by side, the diff between them is the subject.
+   Hero = live diff of approved vs served spec; then who-breaks-whom grid, real comparisons, CI flow. */
+:root {
+  --bg: #eef1f5; --surface: #ffffff; --sunken: #e3e8ef; --ink: #121823; --muted: #586274; --line: #cfd6e1;
+  --accent: #2550b8; --accent-soft: #dde6fb;
+  --err: #b42318; --err-soft: #fbe2df; --warn: #a15c00; --warn-soft: #fbecd2; --info: #1f7a4d; --info-soft: #dcf1e5;
+  --font-display: 'Familjen Grotesk', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d121a; --surface: #151c27; --sunken: #1b2431; --ink: #e7ecf3; --muted: #9aa6b8; --line: #2a3546;
+    --accent: #7ea2ff; --accent-soft: #1c2a4d;
+    --err: #ff8a7d; --err-soft: #3d1714; --warn: #f3b562; --warn-soft: #3a2a10; --info: #5fd394; --info-soft: #12321f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d121a; --surface: #151c27; --sunken: #1b2431; --ink: #e7ecf3; --muted: #9aa6b8; --line: #2a3546;
+  --accent: #7ea2ff; --accent-soft: #1c2a4d;
+  --err: #ff8a7d; --err-soft: #3d1714; --warn: #f3b562; --warn-soft: #3a2a10; --info: #5fd394; --info-soft: #12321f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.6 var(--font-body); margin: 0; }
+body[data-lang="ru"] [lang="en"], body[data-lang="en"] [lang="ru"] { display: none !important; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(32px, 5vw, 50px); font-weight: 700; }
+h2 { font-size: clamp(23px, 3vw, 31px); font-weight: 700; }
+h3 { font-size: 18px; font-weight: 700; }
+p { margin: 0; max-width: 70ch; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.eyebrow { font: 500 12px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+header.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-block: 20px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.seg button { font: 500 13px var(--font-mono); background: transparent; color: var(--muted); border: 0; padding: 6px 14px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.hero { display: grid; gap: 16px; padding-block: 8px 20px; }
+.hero .lead { font-size: 18px; color: var(--muted); }
+section.station { display: grid; gap: 16px; padding-block: 44px 0; }
+section.station > header { display: grid; gap: 8px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs button { font: 500 14px var(--font-body); padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* diff stage */
+.diff { display: grid; grid-template-columns: minmax(0, 1fr) 150px minmax(0, 1fr); gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+@media (max-width: 760px) { .diff { grid-template-columns: minmax(0, 1fr); } .diff .mid { border-block: 1px solid var(--line); } }
+.doc { padding: 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.doc .title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.doc .ver { font: 600 13px var(--font-mono); padding: 2px 8px; border-radius: 6px; background: var(--sunken); }
+.op { font: 400 12.5px/1.45 var(--font-mono); padding: 5px 8px; border-radius: 6px; background: var(--sunken); display: flex; gap: 8px; align-items: baseline; overflow-wrap: anywhere; transition: background .3s, color .3s, opacity .3s; }
+.op b { min-width: 52px; font-weight: 600; }
+.op.err { background: var(--err-soft); color: var(--err); }
+.op.warn { background: var(--warn-soft); color: var(--warn); }
+.op.info { background: var(--info-soft); color: var(--info); }
+.op.gone { text-decoration: line-through; opacity: 0.7; }
+.mid { background: var(--sunken); display: grid; place-items: center; padding: 12px; gap: 10px; text-align: center; }
+.mid .lens { width: 74px; height: 74px; border-radius: 50%; border: 3px solid var(--accent); display: grid; place-items: center; font: 700 13px var(--font-mono); color: var(--accent); background: var(--surface); }
+.mid .lens.scan { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 18%, transparent); } }
+.verdict { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+@media (max-width: 640px) { .verdict { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.verdict div { background: var(--surface); padding: 12px 14px; display: grid; }
+.verdict b { font: 700 28px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.verdict span { font-size: 13px; color: var(--muted); }
+.verdict .e b { color: var(--err); } .verdict .w b { color: var(--warn); } .verdict .i b { color: var(--info); }
+.exit { font: 600 14px var(--font-mono); padding: 10px 14px; border-radius: 8px; }
+.exit.fail { background: var(--err-soft); color: var(--err); } .exit.pass { background: var(--info-soft); color: var(--info); }
+.note { font-size: 14.5px; }
+
+/* who breaks grid */
+.who { display: grid; grid-template-columns: 150px repeat(2, minmax(0, 1fr)); gap: 6px; }
+@media (max-width: 640px) { .who { grid-template-columns: 90px repeat(2, minmax(0, 1fr)); } }
+.who > div { padding: 12px; border-radius: 10px; font-size: 14px; }
+.who .h { font: 600 13px var(--font-body); background: transparent; padding: 4px 6px; color: var(--muted); }
+.who .cell { background: var(--surface); border: 1px solid var(--line); display: grid; gap: 4px; }
+.who .cell strong { font: 600 12px var(--font-mono); text-transform: uppercase; letter-spacing: .05em; }
+.who .cell.err { border-color: var(--err); } .who .cell.err strong { color: var(--err); }
+.who .cell.ok strong { color: var(--info); }
+.who .cell.warn { border-color: var(--warn); } .who .cell.warn strong { color: var(--warn); }
+
+/* flow */
+.flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 860px) { .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .flow { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.card .tag { font: 600 11px var(--font-mono); padding: 2px 8px; border-radius: 999px; justify-self: start; }
+.tag.gate { background: var(--err-soft); color: var(--err); } .tag.report { background: var(--accent-soft); color: var(--accent); } .tag.self { background: var(--info-soft); color: var(--info); }
+.card code { overflow-wrap: anywhere; }
+pre { margin: 0; background: var(--sunken); border-radius: 10px; padding: 14px; font: 400 12.5px/1.55 var(--font-mono); overflow-x: auto; white-space: pre; }
+pre .c { color: var(--muted); } pre .r { color: var(--err); }
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+.compare { overflow-x: auto; }
+table.cmp { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 14px; background: var(--surface); }
+table.cmp th, table.cmp td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.cmp thead th { background: var(--sunken); font-weight: 600; font-size: 13px; }
+table.cmp .hl { background: var(--accent-soft); }
+.cmd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; background: var(--sunken); border-radius: 8px; padding: 6px 6px 6px 12px; }
+.cmd code { overflow-x: auto; white-space: nowrap; }
+.cmd button { font: 500 12px var(--font-body); border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+dl.terms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+@media (max-width: 760px) { dl.terms { grid-template-columns: minmax(0, 1fr); } }
+dl.terms div { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+dl.terms dt { font: 700 15px var(--font-display); }
+dl.terms dd { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+footer { padding-top: 40px; color: var(--muted); font-size: 13px; display: flex; gap: 16px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body data-lang="en">
+
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">api-test-automation · contracts/</span>
+    <div class="seg" role="group" aria-label="Language">
+      <button type="button" id="lang-ru" data-l="ru" aria-pressed="true">RU</button>
+      <button type="button" id="lang-en" data-l="en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1 lang="ru">Дрейф контракта: oasdiff сравнивает две версии API</h1>
+    <h1 lang="en">Contract drift: oasdiff compares two versions of an API</h1>
+    <p class="lead" lang="ru">У нас есть утверждённая спецификация Petstore — договор с клиентами. oasdiff сравнивает её с тем, что сервер отдаёт на самом деле, и сортирует каждое отличие: сломает ли оно существующих клиентов. Если сломает и это не принятое расхождение, ночная сборка красная.</p>
+    <p class="lead" lang="en">We keep an approved Petstore spec: the agreement with clients. oasdiff compares it with what the server actually serves and sorts every difference by one question: will it break existing clients? If it will, and it is not accepted drift, the nightly build fails.</p>
+  </section>
+
+  <section class="station" style="padding-top:4px">
+    <div class="tabs" role="tablist" id="sc-tabs"></div>
+    <div class="diff">
+      <div class="doc"><div class="title"><span class="eyebrow" id="l-left"></span><span class="ver" id="v-left"></span></div><div id="ops-left" style="display:grid;gap:6px"></div></div>
+      <div class="mid"><div class="lens" id="lens">oasdiff</div><span class="muted mono" style="font-size:12px" id="cmdline">breaking</span></div>
+      <div class="doc"><div class="title"><span class="eyebrow" id="l-right"></span><span class="ver" id="v-right"></span></div><div id="ops-right" style="display:grid;gap:6px"></div></div>
+    </div>
+    <div class="verdict" id="verdict"></div>
+    <div class="exit" id="exit"></div>
+    <p class="note" id="sc-note"></p>
+  </section>
+
+  <section class="station">
+    <header>
+      <span class="eyebrow" lang="ru">Главная идея</span><span class="eyebrow" lang="en">The key idea</span>
+      <h2 lang="ru">Что ломает клиента, а что нет</h2><h2 lang="en">What breaks a client and what does not</h2>
+      <p class="muted" lang="ru">Всё зависит от направления данных. Запрос пишет клиент, ответ читает клиент. Сервер может стать мягче к тому, что получает, и щедрее в том, что отдаёт, но не наоборот.</p>
+      <p class="muted" lang="en">It depends on which way the data flows. The client writes the request and reads the response. A server may become more lenient about what it accepts and more generous in what it returns, never the reverse.</p>
+    </header>
+    <div class="who" id="who"></div>
+  </section>
+
+  <section class="station">
+    <header>
+      <span class="eyebrow" lang="ru">Что делает workflow contract.yml</span><span class="eyebrow" lang="en">What contract.yml does</span>
+      <h2 lang="ru">Четыре проверки за один прогон</h2><h2 lang="en">Four checks in one run</h2>
+    </header>
+    <div class="flow" id="flow"></div>
+  </section>
+
+  <section class="station">
+    <header>
+      <span class="eyebrow" lang="ru">Как жить с известными расхождениями</span><span class="eyebrow" lang="en">Living with known drift</span>
+      <h2 lang="ru">known-drift.txt — тот же baseline, что у Schemathesis</h2><h2 lang="en">known-drift.txt: the same baseline idea as in Schemathesis</h2>
+    </header>
+    <div class="cols">
+      <pre id="ignore-file"></pre>
+      <div class="card">
+        <h3 lang="ru">Почему CD-1 принят, а не исправлен</h3><h3 lang="en">Why CD-1 is accepted, not fixed</h3>
+        <p lang="ru">Образ <code>swaggerapi/petstore3:unstable</code> отдаёт спецификацию <b>1.0.17</b>, а утверждённый контракт — <b>1.0.29-SNAPSHOT</b> из master. В старой версии у 7 операций нет ответа 200. Это чужая система, исправить её мы не можем, но обязаны это видеть.</p>
+        <p lang="en">The <code>swaggerapi/petstore3:unstable</code> image serves spec <b>1.0.17</b>, while the approved contract is <b>1.0.29-SNAPSHOT</b> from master. The old version has no 200 response on 7 operations. Not our system to fix, but we must see it.</p>
+        <p lang="ru">Каждая строка — метод, путь и описание изменения из вывода oasdiff. Новое ломающее изменение, которого нет в файле, сразу даёт красную сборку.</p>
+        <p lang="en">Each line is a method, a path and the change text from oasdiff output. A new breaking change not in the file turns the build red at once.</p>
+        <p class="muted" lang="ru">Перекрёстная проверка: Schemathesis независимо нашёл то же самое как FZ-2 — сервер возвращает 200 на DELETE, которого нет в его спецификации.</p>
+        <p class="muted" lang="en">Cross-check: Schemathesis found the same independently as FZ-2: the server answers 200 on DELETE, which its spec does not list.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="station">
+    <header>
+      <span class="eyebrow" lang="ru">Место среди контрактных инструментов</span><span class="eyebrow" lang="en">Among contract tools</span>
+      <h2 lang="ru">oasdiff, Schemathesis и Pact отвечают на разные вопросы</h2><h2 lang="en">oasdiff, Schemathesis and Pact answer different questions</h2>
+    </header>
+    <div class="compare">
+      <table class="cmp">
+        <thead><tr><th></th><th class="hl">oasdiff</th><th>Schemathesis</th><th>Pact <span lang="ru">(следующий)</span><span lang="en">(next)</span></th></tr></thead>
+        <tbody>
+          <tr><td lang="ru">Сравнивает</td><td lang="en">Compares</td><td class="hl"><span lang="ru">документ с документом</span><span lang="en">document with document</span></td><td><span lang="ru">сервер с документом</span><span lang="en">server with document</span></td><td><span lang="ru">ожидания клиента с сервером</span><span lang="en">client expectations with server</span></td></tr>
+          <tr><td lang="ru">Нужен ли сервер</td><td lang="en">Needs a server</td><td class="hl"><span lang="ru">нет, секунды</span><span lang="en">no, seconds</span></td><td><span lang="ru">да, минуты</span><span lang="en">yes, minutes</span></td><td><span lang="ru">да, для проверки поставщика</span><span lang="en">yes, to verify the provider</span></td></tr>
+          <tr><td lang="ru">Когда запускать</td><td lang="en">When to run</td><td class="hl"><span lang="ru">на каждый PR со спекой</span><span lang="en">on every PR touching the spec</span></td><td><span lang="ru">ночью</span><span lang="en">nightly</span></td><td><span lang="ru">в CI обеих сторон</span><span lang="en">in both sides' CI</span></td></tr>
+          <tr><td lang="ru">Ловит</td><td lang="en">Catches</td><td class="hl"><span lang="ru">ломающие изменения в описании API</span><span lang="en">breaking edits to the API description</span></td><td><span lang="ru">сервер не делает то, что описано</span><span lang="en">server not doing what is described</span></td><td><span lang="ru">поставщик сломал конкретного клиента</span><span lang="en">provider broke a specific client</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="station">
+    <header>
+      <span class="eyebrow" lang="ru">Запуск</span><span class="eyebrow" lang="en">Run it</span>
+      <h2 lang="ru">Команды</h2><h2 lang="en">Commands</h2>
+      <p class="muted" lang="ru">oasdiff — одна программа на Go: <code>go install github.com/oasdiff/oasdiff@v1.33.0</code> или <code>brew install oasdiff</code>. Флаг <code>--lang ru</code> выводит отчёт на русском.</p>
+      <p class="muted" lang="en">oasdiff is a single Go binary: <code>go install github.com/oasdiff/oasdiff@v1.33.0</code> or <code>brew install oasdiff</code>. <code>--lang ru</code> prints the report in Russian.</p>
+    </header>
+    <div class="card" id="cmds"></div>
+  </section>
+
+  <section class="station">
+    <header><span class="eyebrow" lang="ru">Словарь</span><span class="eyebrow" lang="en">Glossary</span><h2 lang="ru">Термины</h2><h2 lang="en">Terms</h2></header>
+    <dl class="terms" id="glossary"></dl>
+  </section>
+
+  <footer>
+    <a href="https://github.com/NailKarimov/api-test-automation/blob/main/docs/contract-drift.md">docs/contract-drift.md</a>
+    <a href="https://nailkarimov.github.io/api-test-automation/contract/" lang="ru">Отчёты последнего прогона</a>
+    <a href="https://nailkarimov.github.io/api-test-automation/contract/" lang="en">Latest run reports</a>
+    <a href="https://www.oasdiff.com">oasdiff.com</a>
+    <span>oasdiff v1.33.0 · 17.10.2026</span>
+  </footer>
+</div>
+
+<script>
+const S = { lang: 'ru', sc: 'container' };
+const L = (ru, en) => (S.lang === 'ru' ? ru : en);
+
+/* Real comparisons from the CI run on 17.10.2026 (oasdiff v1.33.0). */
+const SC = {
+  breaking: {
+    tab: ['Самопроверка: v2 ломает', 'Self-test: v2 breaks'], left: ['утверждённый контракт', 'approved contract'], vl: '1.0.29-SNAPSHOT', right: ['fixtures/v2-breaking.yaml', 'fixtures/v2-breaking.yaml'], vr: '2.0.0',
+    counts: [31, 28, 3, 0], exit: 1,
+    ops: [
+      ['GET', '/pet/findByTags', 'err', 'gone', ['путь удалён без deprecation', 'path removed without deprecation']],
+      ['POST', '/pet · id', 'err', '', ['integer → string в запросе и ответе', 'integer → string in request and response']],
+      ['GET', '/pet/findByStatus · status', 'err', '', ['из enum удалено значение sold', 'enum value sold removed']],
+      ['POST', '/user · phone', 'err', '', ['поле запроса стало обязательным', 'request field became required']],
+      ['POST', '/store/order · complete', 'warn', '', ['поле запроса удалено', 'request field removed']],
+    ],
+    note: ['Пять изменений, которые поставщик мог бы выпустить случайно, раскрылись в 28 ошибок: каждое затрагивает несколько операций и типов содержимого. Если oasdiff это не поймает, самопроверка упадёт — инструмент проверяется так же, как тест.', 'Five changes a provider might ship by accident fan out into 28 errors: each touches several operations and media types. If oasdiff misses them the self-test fails, so the tool is tested like a test.'],
+  },
+  compatible: {
+    tab: ['Самопроверка: v1.1 совместима', 'Self-test: v1.1 compatible'], left: ['утверждённый контракт', 'approved contract'], vl: '1.0.29-SNAPSHOT', right: ['fixtures/v1.1-compatible.yaml', 'fixtures/v1.1-compatible.yaml'], vr: '1.1.0',
+    counts: [20, 0, 0, 20], exit: 0,
+    ops: [
+      ['GET', '/pet/count', 'info', '', ['новая операция', 'new operation']],
+      ['GET', '/pet/findByStatus · limit', 'info', '', ['новый необязательный параметр', 'new optional parameter']],
+      ['POST', '/pet · nickname', 'info', '', ['новое необязательное поле', 'new optional field']],
+    ],
+    note: ['Всё новое добавлено как необязательное: старые клиенты не заметят разницы. 20 информационных изменений, 0 ломающих, exit 0.', 'Everything new is optional, so old clients notice nothing. 20 informational changes, 0 breaking, exit 0.'],
+  },
+  container: {
+    tab: ['Контейнер Docker', 'Docker container'], left: ['утверждённый контракт', 'approved contract'], vl: '1.0.29-SNAPSHOT', right: ['swaggerapi/petstore3:unstable', 'swaggerapi/petstore3:unstable'], vr: '1.0.17',
+    counts: [27, 7, 0, 20], exit: 0,
+    ops: [
+      ['DELETE', '/pet/{petId}', 'err', '', ['удалён успешный ответ 200 · CD-1', 'success response 200 removed · CD-1']],
+      ['POST', '/pet/{petId}', 'err', '', ['удалён успешный ответ 200 · CD-1', 'success response 200 removed · CD-1']],
+      ['POST', '/user', 'err', '', ['удалён успешный ответ 200 · CD-1', 'success response 200 removed · CD-1']],
+      ['…', ['ещё 4 операции user/store', '4 more user/store operations'], 'err', '', ['то же · CD-1', 'same · CD-1']],
+      ['GET', '/pet/findByStatus · status', 'info', '', ['параметр стал необязательным', 'parameter became optional']],
+      ['POST', '/pet', 'info', '', ['405 добавлен, 400 и 422 удалены', '405 added, 400 and 422 removed']],
+    ],
+    note: ['Настоящая находка первого прогона: образ «unstable» собран из старой спецификации 1.0.17. 7 ломающих изменений (CD-1) приняты в known-drift.txt, поэтому exit 0, а любое новое сделает сборку красной.', 'A real finding from the first run: the "unstable" image is built from the old 1.0.17 spec. The 7 breaking changes (CD-1) are accepted in known-drift.txt, hence exit 0; anything new turns the build red.'],
+  },
+  public: {
+    tab: ['Публичная песочница', 'Public sandbox'], left: ['утверждённый контракт', 'approved contract'], vl: '1.0.29-SNAPSHOT', right: ['petstore3.swagger.io', 'petstore3.swagger.io'], vr: '1.0.27',
+    counts: [0, 0, 0, 0], exit: 0,
+    ops: [['', ['отличия только в описаниях и примерах', 'differences only in descriptions and examples'], 'info', '', ['oasdiff не считает их изменениями API', 'oasdiff does not count them as API changes']]],
+    note: ['Версии разные, но поведение API в документе то же: «no changes to report, but the specs are different». Эта проверка только информирует и никогда не роняет сборку.', 'The versions differ but the documented API behaves the same: "no changes to report, but the specs are different". This check only informs and never fails the build.'],
+  },
+};
+let anim = null;
+function renderScenario() {
+  const sc = SC[S.sc];
+  const tabs = document.getElementById('sc-tabs');
+  tabs.innerHTML = Object.entries(SC).map(([k, v]) => `<button type="button" role="tab" id="sc-${k}" aria-selected="${k === S.sc}">${L(...v.tab)}</button>`).join('');
+  tabs.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { S.sc = b.id.slice(3); renderScenario(); }));
+  document.getElementById('l-left').textContent = L(...sc.left);
+  document.getElementById('l-right').textContent = L(...sc.right);
+  document.getElementById('v-left').textContent = sc.vl;
+  document.getElementById('v-right').textContent = sc.vr;
+  const name = (p) => (Array.isArray(p) ? L(...p) : p);
+  document.getElementById('ops-left').innerHTML = sc.ops.map((o) => `<div class="op"><b>${o[0]}</b><span>${name(o[1])}</span></div>`).join('');
+  const right = document.getElementById('ops-right');
+  right.innerHTML = sc.ops.map((o, i) => `<div class="op" id="r-${i}"><b>${o[0]}</b><span>${name(o[1])} — <em style="font-style:normal">${L(...o[4])}</em></span></div>`).join('');
+  const [total, e, w, inf] = sc.counts;
+  document.getElementById('verdict').innerHTML = `<div><b>${total}</b><span>${L('изменений всего', 'changes in total')}</span></div><div class="e"><b>${e}</b><span>error · ${L('ломает клиента', 'breaks clients')}</span></div><div class="w"><b>${w}</b><span>warning · ${L('возможно ломает', 'may break')}</span></div><div class="i"><b>${inf}</b><span>info · ${L('безопасно', 'safe')}</span></div>`;
+  const ex = document.getElementById('exit');
+  ex.className = 'exit ' + (sc.exit ? 'fail' : 'pass');
+  ex.textContent = sc.exit ? L('exit 1 — сборка красная', 'exit 1 — build fails') : L('exit 0 — сборка зелёная', 'exit 0 — build passes');
+  document.getElementById('sc-note').textContent = L(...sc.note);
+  document.getElementById('cmdline').textContent = S.sc === 'container' ? 'breaking --err-ignore' : 'breaking --fail-on ERR';
+  // scan animation: classify the right-hand rows one by one
+  clearTimeout(anim);
+  const lens = document.getElementById('lens');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mark = (i) => { const o = sc.ops[i]; const el = document.getElementById('r-' + i); el.classList.add(o[2]); if (o[3]) el.classList.add(o[3]); };
+  if (reduce) { sc.ops.forEach((_, i) => mark(i)); return; }
+  lens.classList.add('scan');
+  let i = 0;
+  const step = () => { if (i >= sc.ops.length) { lens.classList.remove('scan'); return; } mark(i++); anim = setTimeout(step, 450); };
+  anim = setTimeout(step, 300);
+}
+
+const WHO = [
+  [['Добавить поле', 'Add a field'], ['ok', 'необязательное поле — безопасно; обязательное — ломает: старые клиенты его не шлют', 'optional field is safe; a required one breaks: old clients do not send it'], ['ok', 'безопасно: клиент игнорирует то, чего не знает', 'safe: the client ignores what it does not know']],
+  [['Удалить поле', 'Remove a field'], ['warn', 'warning: клиент шлёт лишнее, сервер может отказать', 'warning: the client sends something extra; the server may reject it'], ['err', 'обязательное — ломает: клиент ждёт поле и падает без него. Необязательное oasdiff считает безопасным, но клиент, который на него рассчитывал, всё равно может сломаться', 'a required one breaks: the client expects it. oasdiff treats an optional one as safe, yet a client that relied on it can still break']],
+  [['Сменить тип', 'Change a type'], ['err', 'ломает: integer → string не примут', 'breaks: integer → string is rejected'], ['err', 'ломает: клиент не распарсит ответ', 'breaks: the client cannot parse the response']],
+  [['Сузить enum', 'Narrow an enum'], ['err', 'ломает: убрали sold — запросы с ним отклонят', 'breaks: drop sold and requests with it are rejected'], ['ok', 'безопасно: значений в ответе стало меньше', 'safe: fewer values come back']],
+  [['Расширить enum', 'Widen an enum'], ['ok', 'безопасно: сервер принимает больше', 'safe: the server accepts more'], ['warn', 'warning: старый клиент получит незнакомое значение', 'warning: an old client gets an unknown value']],
+  [['Удалить код ответа', 'Remove a status code'], ['ok', '—', '—'], ['err', 'ломает, если это был успешный ответ (как CD-1)', 'breaks when it was the success response (as in CD-1)']],
+];
+function renderWho() {
+  const lab = { ok: L('безопасно', 'safe'), warn: 'warning', err: 'error' };
+  document.getElementById('who').innerHTML = `<div class="h"></div><div class="h">${L('В запросе (пишет клиент)', 'In the request (client writes)')}</div><div class="h">${L('В ответе (читает клиент)', 'In the response (client reads)')}</div>` +
+    WHO.map((r) => `<div class="h" style="align-self:center">${L(...r[0])}</div>` + [r[1], r[2]].map((c) => `<div class="cell ${c[0]}"><strong>${lab[c[0]]}</strong>${L(c[1], c[2])}</div>`).join('')).join('');
+}
+
+const FLOW = [
+  ['self', ['Самопроверка', 'Self-test'], ['oasdiff обязан забраковать v2-breaking.yaml и принять v1.1-compatible.yaml. Защита от ложной уверенности: если правила сломаются, мы узнаем.', 'oasdiff must reject v2-breaking.yaml and accept v1.1-compatible.yaml. Guards against false confidence: if the rules break, we will know.'], 'fixtures/*.yaml'],
+  ['gate', ['Проверка PR', 'PR check'], ['Если в pull request меняют утверждённый контракт, сравнивается версия из base-ветки с новой. Ломающее изменение — PR красный.', 'When a pull request edits the approved contract, the base-branch version is compared with the new one. A breaking edit fails the PR.'], 'origin/main:contracts/…'],
+  ['gate', ['Шлюз: контейнер', 'Gate: container'], ['Спецификация, которую отдаёт наш контейнер Petstore, против утверждённой, минус known-drift.txt. Новая ломка — ночная сборка красная.', 'The spec our Petstore container serves vs the approved one, minus known-drift.txt. New breakage fails the nightly build.'], ':8090/api/v3/openapi.json'],
+  ['report', ['Наблюдение: песочница', 'Watch: public sandbox'], ['То же для petstore3.swagger.io, но только отчёт: публичный сервис меняется без нас, ронять сборку из-за него нельзя.', 'Same for petstore3.swagger.io, but report only: a public service changes without us and must not fail the build.'], 'petstore3.swagger.io'],
+];
+function renderFlow() {
+  const tag = { self: L('самопроверка', 'self-test'), gate: L('роняет сборку', 'fails the build'), report: L('только отчёт', 'report only') };
+  document.getElementById('flow').innerHTML = FLOW.map((f, i) => `<div class="card"><span class="eyebrow">${i + 1} / 4</span><span class="tag ${f[0]}">${tag[f[0]]}</span><h3>${L(...f[1])}</h3><p style="font-size:14.5px">${L(...f[2])}</p><code class="muted">${f[3]}</code></div>`).join('');
+}
+function renderIgnore() {
+  document.getElementById('ignore-file').innerHTML = `<span class="c"># contracts/petstore/known-drift.txt  (oasdiff --err-ignore)</span>
+<span class="c"># ${L('метод + путь + описание; id можно дописать', 'method + path + description; an id may be added')}</span>
+CD-1 PUT /user/{username} removed the success response with the status \`200\`
+CD-1 DELETE /user/{username} removed the success response …
+CD-1 GET /user/logout removed the success response …
+CD-1 POST /user removed the success response …
+CD-1 DELETE /store/order/{orderId} removed the success response …
+CD-1 POST /pet/{petId} removed the success response …
+CD-1 DELETE /pet/{petId} removed the success response …
+
+<span class="c">$ oasdiff breaking contract.yaml container.json \\
+    --err-ignore known-drift.txt --fail-on ERR</span>
+No breaking changes to report, but the specs are different.
+<span class="c">exit 0</span>`;
+}
+const CMDS = [
+  ['npm run contract:selftest', 'показать, что находит oasdiff на ломающей фикстуре', 'see what oasdiff finds in the breaking fixture'],
+  ['npm run fuzz:up && npm run contract:check', 'контейнер против утверждённого контракта', 'container vs the approved contract'],
+  ['npm run contract:changelog', 'все изменения, включая безопасные', 'every change, safe ones included'],
+  ['oasdiff breaking origin/main:contracts/petstore/openapi.yaml contracts/petstore/openapi.yaml', 'то, что делает проверка PR', 'what the PR check does'],
+];
+function renderCmds() {
+  document.getElementById('cmds').innerHTML = CMDS.map((c, i) => `<div style="display:grid;gap:4px"><span class="eyebrow">${L(c[1], c[2])}</span><div class="cmd"><code>${c[0]}</code><button type="button" id="cp-${i}" data-c="${c[0]}">${L('Копировать', 'Copy')}</button></div></div>`).join('');
+  document.querySelectorAll('.cmd button').forEach((b) => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.dataset.c); b.textContent = L('Скопировано', 'Copied'); }
+    catch (e) { const r = document.createRange(); r.selectNodeContents(b.previousElementSibling); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  }));
+}
+const TERMS = [
+  ['Contract (контракт)', 'Утверждённое описание API, на которое опираются клиенты. Здесь — OpenAPI-файл в репозитории.', 'The approved API description clients rely on. Here, an OpenAPI file in the repository.'],
+  ['Contract drift (дрейф)', 'Сервер или новая версия спецификации разошлись с утверждённым контрактом.', 'The server or a new spec version no longer matches the approved contract.'],
+  ['Breaking change', 'Изменение, после которого существующий клиент перестаёт работать без собственных правок.', 'A change after which an existing client stops working unless it is changed too.'],
+  ['Backward compatible', 'Новая версия принимает всё, что принимала старая, и отдаёт всё, что отдавала.', 'The new version accepts everything the old one did and returns everything it returned.'],
+  ['Deprecation', 'Пометка «скоро удалим». oasdiff требует её перед удалением пути, иначе это error.', 'A "will be removed" marker. oasdiff wants it before a path is removed; otherwise it is an error.'],
+  ['Semantic versioning', 'MAJOR.MINOR.PATCH: ломающее изменение требует новой MAJOR-версии. oasdiff заметил, что версия даже уменьшилась.', 'MAJOR.MINOR.PATCH: a breaking change needs a new MAJOR. oasdiff noticed the version even went down.'],
+  ['Fixture (фикстура)', 'Заранее подготовленные входные данные для теста. Здесь — две версии спецификации для самопроверки.', 'Prepared input for a test. Here, two spec versions for the self-test.'],
+  ['Robustness principle', 'Закон Постела: будь строг в том, что отправляешь, и терпим к тому, что принимаешь. Отсюда таблица «что ломает клиента».', 'Postel\'s law: be strict in what you send and lenient in what you accept. The "what breaks a client" grid follows from it.'],
+];
+function renderTerms() { document.getElementById('glossary').innerHTML = TERMS.map((x) => `<div><dt>${x[0]}</dt><dd>${L(x[1], x[2])}</dd></div>`).join(''); }
+
+function renderAll() { renderScenario(); renderWho(); renderFlow(); renderIgnore(); renderCmds(); renderTerms(); }
+function setLang(l) {
+  S.lang = l; document.body.dataset.lang = l; document.documentElement.lang = l;
+  document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.l === l)));
+  try { localStorage.setItem('cd-lang', l); } catch (e) {}
+  renderAll();
+}
+document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.l)));
+let start = 'ru';
+try { start = localStorage.getItem('cd-lang') || document.documentElement.dataset.defaultLang || 'ru'; } catch (e) {}
+setLang(start);
+</script>
+
+</body>
+</html>
