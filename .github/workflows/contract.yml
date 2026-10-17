@@ -1,0 +1,133 @@
+name: Contract drift (oasdiff)
+
+# Compares OpenAPI documents and fails on breaking changes (see docs/contract-drift.md):
+#   1. self-test — oasdiff must flag the breaking fixture and accept the compatible one;
+#   2. gate      — the private Petstore container must still serve a spec compatible with the
+#                  approved contract in contracts/petstore/openapi.yaml;
+#   3. PR check  — a pull request that edits the approved contract must not break it;
+#   4. watch     — what changed on the public sandbox (report only, never fails).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/**'
+      - '.github/workflows/contract.yml'
+  pull_request:
+    paths:
+      - 'contracts/**'
+  schedule:
+    - cron: '45 3 * * *' # nightly
+  workflow_dispatch:
+
+permissions:
+  contents: write # publish the changelog to gh-pages/contract
+
+concurrency:
+  group: contract
+  cancel-in-progress: false
+
+env:
+  OASDIFF_VERSION: v1.33.0
+  CONTRACT: contracts/petstore/openapi.yaml
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the PR check reads the contract from the base branch
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: false
+
+      - name: Install oasdiff
+        run: go install github.com/oasdiff/oasdiff@${OASDIFF_VERSION} && oasdiff --version
+
+      - name: Self-test — the breaking fixture must be rejected, the compatible one accepted
+        run: |
+          if oasdiff breaking "$CONTRACT" contracts/petstore/fixtures/v2-breaking.yaml --fail-on ERR > /dev/null; then
+            echo "::error title=oasdiff self-test::v2-breaking.yaml was NOT reported as breaking"; exit 1
+          fi
+          oasdiff breaking "$CONTRACT" contracts/petstore/fixtures/v1.1-compatible.yaml --fail-on ERR
+          echo "::notice title=oasdiff self-test::breaking fixture rejected, compatible fixture accepted"
+
+      - name: PR check — the edited contract must stay backward compatible
+        if: github.event_name == 'pull_request'
+        run: >
+          oasdiff breaking "origin/${{ github.base_ref }}:$CONTRACT" "$CONTRACT"
+          --fail-on ERR --format githubactions
+
+      - name: Start a private Petstore (Docker)
+        run: docker compose -f infra/petstore/docker-compose.yml up -d --wait
+
+      - name: Download the specs the servers actually serve
+        run: |
+          mkdir -p contract-report
+          curl -fsS http://localhost:8090/api/v3/openapi.json -o contract-report/container.json
+          curl -fsS https://petstore3.swagger.io/api/v3/openapi.json -o contract-report/public.json \
+            || echo "::warning title=Public sandbox::could not download its spec"
+
+      - name: Gate — container vs approved contract
+        id: gate
+        continue-on-error: true
+        run: |
+          oasdiff breaking "$CONTRACT" contract-report/container.json --fail-on ERR --format githubactions
+          oasdiff breaking "$CONTRACT" contract-report/container.json --format markdown > contract-report/container-breaking.md
+          oasdiff changelog "$CONTRACT" contract-report/container.json --format html > contract-report/container.html
+
+      - name: Watch — public sandbox vs approved contract (report only)
+        if: always()
+        run: |
+          [ -s contract-report/public.json ] || exit 0
+          oasdiff changelog "$CONTRACT" contract-report/public.json --format html > contract-report/public.html
+          oasdiff changelog "$CONTRACT" contract-report/public.json --format markdown > contract-report/public.md
+          echo "::notice title=Public sandbox drift::$(oasdiff changelog "$CONTRACT" contract-report/public.json --format singleline | wc -l) change(s) vs the approved contract"
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo '## Contract drift — Swagger Petstore'
+            echo
+            echo '### Container vs approved contract (gate)'
+            if [ -s contract-report/container-breaking.md ]; then cat contract-report/container-breaking.md; else echo 'No breaking changes.'; fi
+            echo
+            echo '### Public sandbox vs approved contract (report only)'
+            if [ -s contract-report/public.md ]; then cat contract-report/public.md; else echo 'No changes.'; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat > contract-report/index.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>Contract drift</title>
+          <h1>Contract drift — Swagger Petstore</h1>
+          <ul><li><a href="container.html">Private container vs approved contract</a></li>
+          <li><a href="public.html">Public sandbox vs approved contract</a></li></ul>
+          HTML
+
+      - name: Publish the changelog to GitHub Pages (/contract)
+        if: always() && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: contract-report
+          destination_dir: contract
+          keep_files: true
+
+      - name: Upload the specs and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-report
+          path: contract-report
+          retention-days: 30
+
+      - name: Stop the Petstore
+        if: always()
+        run: docker compose -f infra/petstore/docker-compose.yml down -v
+
+      - name: Fail the job on breaking drift
+        if: steps.gate.outcome == 'failure'
+        run: exit 1
