@@ -61,6 +61,13 @@ for (const f of failures.slice(0, 10)) {
   console.log(`::error title=Schemathesis: ${esc(f.name)}::${esc(f.body.slice(0, 4000))}`);
 }
 
+// Annotations are cut at about 4 KB, so the recorded baseline is printed compactly, in numbered parts.
 if (recording && existsSync('fuzz/baseline.json')) {
-  console.log(`::notice title=Recorded baseline::${esc(readFileSync('fuzz/baseline.json', 'utf8'))}`);
+  const compact = JSON.stringify(JSON.parse(readFileSync('fuzz/baseline.json', 'utf8')));
+  const parts = compact.match(/[\s\S]{1,3500}/g) ?? [];
+  parts.slice(0, 9).forEach((part, i) => {
+    console.log(`::notice title=Recorded baseline ${i + 1}/${parts.length}::${esc(part)}`);
+  });
+  if (parts.length > 9)
+    console.log('::warning title=Recorded baseline::Too large for annotations; use the artifact');
 }
