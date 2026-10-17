@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en" data-default-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Schemathesis на Petstore</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a lab notebook. One animated pipeline up top (spec → generator → server → checks → gate),
+   then stations that zoom into each stage, ending with real results and how to run it. */
+:root {
+  --bg: #eef1f5; --surface: #ffffff; --sunken: #e3e8ef; --ink: #121823; --muted: #586274; --line: #cfd6e1;
+  --accent: #2550b8; --accent-soft: #dde6fb;
+  --pass: #1f7a4d; --pass-soft: #dcf1e5; --known: #a15c00; --known-soft: #fbecd2; --new: #b42318; --new-soft: #fbe2df;
+  --font-display: 'Familjen Grotesk', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d121a; --surface: #151c27; --sunken: #1b2431; --ink: #e7ecf3; --muted: #9aa6b8; --line: #2a3546;
+    --accent: #7ea2ff; --accent-soft: #1c2a4d;
+    --pass: #5fd394; --pass-soft: #12321f; --known: #f3b562; --known-soft: #3a2a10; --new: #ff8a7d; --new-soft: #3d1714;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d121a; --surface: #151c27; --sunken: #1b2431; --ink: #e7ecf3; --muted: #9aa6b8; --line: #2a3546;
+  --accent: #7ea2ff; --accent-soft: #1c2a4d;
+  --pass: #5fd394; --pass-soft: #12321f; --known: #f3b562; --known-soft: #3a2a10; --new: #ff8a7d; --new-soft: #3d1714;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.6 var(--font-body); margin: 0; }
+body[data-lang="ru"] [lang="en"], body[data-lang="en"] [lang="ru"] { display: none !important; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: clamp(24px, 3vw, 32px); font-weight: 700; }
+h3 { font-size: 18px; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.eyebrow { font: 500 12px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+header.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-block: 20px; flex-wrap: wrap; }
+.langs { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.langs button { font: 500 13px var(--font-mono); background: transparent; color: var(--muted); border: 0; padding: 6px 14px; cursor: pointer; }
+.langs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+.hero { display: grid; gap: 20px; padding-block: 12px 28px; }
+.hero .lead { font-size: 19px; color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.stat { background: var(--surface); padding: 14px 16px; display: grid; gap: 2px; }
+.stat b { font: 700 28px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 13px; }
+@media (max-width: 640px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; overflow-x: auto; }
+.stage svg { display: block; width: 100%; min-width: 720px; height: auto; }
+.stage .legend { display: flex; gap: 18px; flex-wrap: wrap; padding: 8px 6px 2px; font-size: 13px; color: var(--muted); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.svg-label { font: 600 13px var(--font-body); fill: var(--ink); }
+.svg-sub { font: 400 11px var(--font-mono); fill: var(--muted); }
+.node { fill: var(--sunken); stroke: var(--line); }
+.track { stroke: var(--line); stroke-width: 2; fill: none; stroke-dasharray: 4 6; }
+
+section.station { display: grid; gap: 18px; padding-block: 44px 0; }
+section.station > header { display: grid; gap: 8px; }
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.panel .muted { color: var(--muted); font-size: 14px; }
+
+.cards3 { display: grid; gap: 8px; }
+.case { display: flex; gap: 10px; align-items: baseline; font: 400 13px var(--font-mono); padding: 8px 10px; background: var(--sunken); border-radius: 8px; overflow-wrap: anywhere; }
+.case i { font-style: normal; color: var(--pass); font-weight: 600; }
+.grid-dots { display: grid; grid-template-columns: repeat(25, 1fr); gap: 4px; }
+.grid-dots span { aspect-ratio: 1; border-radius: 50%; background: var(--pass); opacity: 0.8; transition: background .3s; }
+.grid-dots span.bad { background: var(--new); opacity: 1; }
+.btn { font: 500 14px var(--font-body); background: var(--ink); color: var(--bg); border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer; justify-self: start; }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs button { font: 500 14px var(--font-body); padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.phase { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; }
+@media (max-width: 760px) { .phase { grid-template-columns: minmax(0, 1fr); } }
+pre { margin: 0; background: var(--sunken); border-radius: 10px; padding: 14px; font: 400 12.5px/1.55 var(--font-mono); overflow-x: auto; white-space: pre; }
+pre .r { color: var(--new); } pre .g { color: var(--pass); } pre .c { color: var(--muted); }
+.chain { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font: 500 12px var(--font-mono); }
+.chain span { padding: 4px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--ink); }
+.chain em { font-style: normal; color: var(--muted); }
+
+.matrix-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+table.matrix { border-collapse: separate; border-spacing: 3px; font-size: 12.5px; min-width: 720px; width: 100%; }
+table.matrix th { font: 500 11.5px var(--font-mono); color: var(--muted); text-align: left; padding: 4px 6px; white-space: nowrap; }
+table.matrix thead th { text-align: center; }
+table.matrix td { text-align: center; border-radius: 5px; height: 28px; font: 500 12px var(--font-mono); font-variant-numeric: tabular-nums; cursor: default; }
+table.matrix td.z { background: var(--sunken); color: transparent; }
+.method { display: inline-block; min-width: 54px; font-weight: 600; }
+.fzlist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 20px; }
+@media (max-width: 760px) { .fzlist { grid-template-columns: minmax(0, 1fr); } }
+.fz { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; font-size: 14px; align-items: baseline; }
+.fz b { font: 600 13px var(--font-mono); color: var(--new); }
+.tip { position: fixed; z-index: 20; pointer-events: none; max-width: 300px; background: var(--ink); color: var(--bg); font-size: 12.5px; padding: 8px 10px; border-radius: 8px; }
+
+.gate svg { width: 100%; min-width: 640px; height: auto; display: block; }
+.gate .g-node rect { fill: var(--sunken); stroke: var(--line); transition: fill .3s, stroke .3s; }
+.gate .g-node.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.gate .g-node.ok.on rect { fill: var(--known-soft); stroke: var(--known); }
+.gate .g-node.bad.on rect { fill: var(--new-soft); stroke: var(--new); }
+.gate .g-edge { stroke: var(--line); stroke-width: 2; fill: none; transition: stroke .3s; }
+.gate .g-edge.on { stroke: var(--accent); stroke-width: 3; }
+.verdict { font-weight: 600; padding: 10px 14px; border-radius: 8px; background: var(--sunken); }
+
+.compare { overflow-x: auto; }
+table.cmp { width: 100%; min-width: 680px; border-collapse: collapse; font-size: 14px; background: var(--surface); border-radius: 12px; overflow: hidden; }
+table.cmp th, table.cmp td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.cmp thead th { font: 600 13px var(--font-body); background: var(--sunken); }
+table.cmp td:first-child { color: var(--muted); font-size: 13px; width: 160px; }
+table.cmp .hl { background: var(--accent-soft); }
+
+.cmd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; background: var(--sunken); border-radius: 8px; padding: 6px 6px 6px 12px; }
+.cmd code { overflow-x: auto; white-space: nowrap; }
+.cmd button { font: 500 12px var(--font-body); border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+
+dl.terms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+@media (max-width: 760px) { dl.terms { grid-template-columns: minmax(0, 1fr); } }
+dl.terms div { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+dl.terms dt { font: 700 15px var(--font-display); }
+dl.terms dd { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+footer { padding-top: 40px; color: var(--muted); font-size: 13px; display: flex; gap: 16px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body data-lang="en">
+
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">api-test-automation · fuzz/</span>
+    <div class="langs" role="group" aria-label="Language">
+      <button type="button" id="lang-ru" data-l="ru" aria-pressed="true">RU</button>
+      <button type="button" id="lang-en" data-l="en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1 lang="ru">Schemathesis: тесты, которые пишет сама OpenAPI-спецификация</h1>
+    <h1 lang="en">Schemathesis: tests written by the OpenAPI spec itself</h1>
+    <p class="lead" lang="ru">Инструмент читает описание API, сам генерирует тысячи запросов, включая заведомо неправильные, и проверяет каждый ответ на соответствие той же спецификации. Здесь он гоняет копию Swagger Petstore в Docker.</p>
+    <p class="lead" lang="en">The tool reads the API description, generates thousands of requests (deliberately broken ones included) and checks every response against that same spec. Here it runs against a private Swagger Petstore in Docker.</p>
+    <div class="stats">
+      <div class="stat"><b>19/19</b><span lang="ru">операций проверено</span><span lang="en">operations tested</span></div>
+      <div class="stat"><b>3 628</b><span lang="ru">сгенерировано запросов</span><span lang="en">generated test cases</span></div>
+      <div class="stat"><b>42 с</b><span lang="ru">на прогон в CI</span><span lang="en">per CI run</span></div>
+      <div class="stat"><b>83</b><span lang="ru">расхождения → 8 дефектов</span><span lang="en">failures → 8 defects</span></div>
+    </div>
+
+    <div class="stage" aria-label="Pipeline animation">
+      <svg id="pipe" viewBox="0 0 1000 300" role="img" aria-labelledby="pipe-t">
+        <title id="pipe-t">OpenAPI spec → generator → Petstore container → checks → baseline gate → CI</title>
+        <path id="p-out" class="track" d="M150 150 C 230 150, 250 110, 330 110 L 520 110"/>
+        <path id="p-back" class="track" d="M600 190 L 690 190"/>
+        <g class="n-spec">
+          <rect class="node" x="30" y="85" width="120" height="130" rx="10"/>
+          <g fill="var(--muted)"><rect x="50" y="110" width="80" height="6" rx="3"/><rect x="50" y="126" width="60" height="6" rx="3"/><rect x="50" y="142" width="70" height="6" rx="3"/><rect x="50" y="158" width="50" height="6" rx="3"/></g>
+          <text class="svg-label" x="90" y="240" text-anchor="middle">openapi.json</text>
+          <text class="svg-sub" x="90" y="256" text-anchor="middle">19 operations</text>
+        </g>
+        <g>
+          <rect class="node" x="205" y="40" width="130" height="38" rx="8"/>
+          <text class="svg-label" x="270" y="64" text-anchor="middle" id="gen-label">generator</text>
+          <g id="phase-chips" font-family="IBM Plex Mono, monospace" font-size="10.5">
+            <rect x="200" y="215" width="66" height="22" rx="11" fill="var(--accent-soft)"/><text x="233" y="230" text-anchor="middle" fill="var(--ink)">examples</text>
+            <rect x="270" y="215" width="66" height="22" rx="11" fill="var(--accent-soft)"/><text x="303" y="230" text-anchor="middle" fill="var(--ink)">coverage</text>
+            <rect x="200" y="243" width="66" height="22" rx="11" fill="var(--accent-soft)"/><text x="233" y="258" text-anchor="middle" fill="var(--ink)">fuzzing</text>
+            <rect x="270" y="243" width="66" height="22" rx="11" fill="var(--accent-soft)"/><text x="303" y="258" text-anchor="middle" fill="var(--ink)">stateful</text>
+          </g>
+        </g>
+        <g>
+          <rect class="node" x="520" y="70" width="80" height="160" rx="10"/>
+          <g fill="var(--line)"><rect x="534" y="88" width="52" height="10" rx="2"/><rect x="534" y="104" width="52" height="10" rx="2"/><rect x="534" y="120" width="52" height="10" rx="2"/></g>
+          <text class="svg-label" x="560" y="252" text-anchor="middle">Petstore</text>
+          <text class="svg-sub" x="560" y="268" text-anchor="middle">docker :8090</text>
+        </g>
+        <g>
+          <path d="M690 150 L 770 150 L 750 230 L 710 230 Z" fill="var(--sunken)" stroke="var(--line)"/>
+          <g stroke="var(--muted)" stroke-width="1"><line x1="698" y1="168" x2="762" y2="168"/><line x1="702" y1="186" x2="758" y2="186"/><line x1="706" y1="204" x2="754" y2="204"/></g>
+          <text class="svg-label" x="730" y="140" text-anchor="middle" id="checks-label">checks</text>
+          <text class="svg-sub" x="730" y="252" text-anchor="middle">schema · status · 5xx · auth</text>
+        </g>
+        <g>
+          <rect class="node" x="840" y="40" width="130" height="60" rx="8"/>
+          <circle cx="862" cy="70" r="6" fill="var(--pass)"/><text class="svg-label" x="876" y="66" id="l-pass">passed</text><text class="svg-sub" x="876" y="82" id="c-pass">0</text>
+          <rect class="node" x="840" y="120" width="130" height="60" rx="8"/>
+          <circle cx="862" cy="150" r="6" fill="var(--known)"/><text class="svg-label" x="876" y="146" id="l-known">baseline</text><text class="svg-sub" x="876" y="162" id="c-known">0</text>
+          <rect class="node" x="840" y="200" width="130" height="60" rx="8"/>
+          <circle cx="862" cy="230" r="6" fill="var(--new)"/><text class="svg-label" x="876" y="226" id="l-new">new → CI red</text><text class="svg-sub" x="876" y="242" id="c-new">0</text>
+        </g>
+        <g id="particles"></g>
+      </svg>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--accent)"></i><span lang="ru">запрос</span><span lang="en">request</span></span>
+        <span><i class="dot" style="background:var(--pass)"></i><span lang="ru">ответ прошёл все проверки</span><span lang="en">response passed every check</span></span>
+        <span><i class="dot" style="background:var(--known)"></i><span lang="ru">известный дефект (в baseline)</span><span lang="en">known defect (in the baseline)</span></span>
+        <span><i class="dot" style="background:var(--new)"></i><span lang="ru">новое расхождение → сборка красная</span><span lang="en">new failure → build fails</span></span>
+        <button type="button" class="btn ghost" id="pipe-toggle" style="margin-left:auto;padding:4px 10px;font-size:12px"><span lang="ru">Пауза</span><span lang="en">Pause</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="station" id="idea">
+    <header>
+      <span class="eyebrow" lang="ru">Идея</span><span class="eyebrow" lang="en">The idea</span>
+      <h2 lang="ru">Пример против свойства</h2><h2 lang="en">Example vs property</h2>
+    </header>
+    <div class="cols">
+      <div class="panel">
+        <h3 lang="ru">Обычный тест: вы придумываете примеры</h3><h3 lang="en">A regular test: you invent the examples</h3>
+        <div class="cards3">
+          <div class="case"><i>200</i> POST /pet {"name":"Rex","photoUrls":[]}</div>
+          <div class="case"><i>404</i> GET /pet/999999999</div>
+          <div class="case"><i>400</i> GET /pet/abc</div>
+        </div>
+        <p class="muted" lang="ru">Точный оракул: «питомец Rex создан». Покрыто ровно то, о чём вы подумали.</p>
+        <p class="muted" lang="en">Exact oracle: "Rex was created". Covers exactly what you thought of.</p>
+      </div>
+      <div class="panel">
+        <h3 lang="ru">Property-based: вы задаёте правило</h3><h3 lang="en">Property-based: you state a rule</h3>
+        <div class="case" style="color:var(--ink)">∀ request ∈ spec: status ≠ 5xx ∧ body ⊨ schema</div>
+        <div class="grid-dots" id="dots" aria-label="200 generated requests"></div>
+        <p class="muted" id="dots-caption"></p>
+        <button type="button" class="btn" id="regen"><span lang="ru">Сгенерировать ещё 200</span><span lang="en">Generate another 200</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="station" id="phases">
+    <header>
+      <span class="eyebrow" lang="ru">Как генерируются запросы</span><span class="eyebrow" lang="en">How requests are generated</span>
+      <h2 lang="ru">Четыре фазы одного прогона</h2><h2 lang="en">Four phases of one run</h2>
+      <p lang="ru">Фазы идут по порядку. Все примеры ниже взяты из настоящего прогона против Petstore.</p>
+      <p lang="en">The phases run in order. Every example below comes from the real run against Petstore.</p>
+    </header>
+    <div class="tabs" role="tablist" id="phase-tabs"></div>
+    <div class="panel phase" role="tabpanel" id="phase-panel"></div>
+  </section>
+
+  <section class="station" id="results">
+    <header>
+      <span class="eyebrow" lang="ru">Результат первого прогона</span><span class="eyebrow" lang="en">First run results</span>
+      <h2 lang="ru">Где сервер расходится со своей спецификацией</h2><h2 lang="en">Where the server disagrees with its own spec</h2>
+      <p lang="ru">Строки — операции, столбцы — дефекты. Число — сколько уникальных расхождений Schemathesis записал в baseline. Наведите на ячейку.</p>
+      <p lang="en">Rows are operations, columns are defects; the number is how many unique failures went into the baseline. Hover a cell.</p>
+    </header>
+    <div class="matrix-wrap"><table class="matrix" id="matrix"></table></div>
+    <div class="fzlist" id="fzlist"></div>
+  </section>
+
+  <section class="station gate" id="gate">
+    <header>
+      <span class="eyebrow" lang="ru">Как это не ломает CI</span><span class="eyebrow" lang="en">Why CI stays usable</span>
+      <h2 lang="ru">Baseline: известные дефекты отдельно, новые — красным</h2><h2 lang="en">Baseline: known defects aside, new ones fail</h2>
+      <p lang="ru">Идея та же, что у <code>test.fail()</code> с номером дефекта в Playwright-тестах. Выберите случай и посмотрите, куда он пойдёт.</p>
+      <p lang="en">Same idea as <code>test.fail()</code> with a defect id in the Playwright tests. Pick a case and follow it.</p>
+    </header>
+    <div class="tabs" id="gate-tabs"></div>
+    <div class="stage">
+      <svg viewBox="0 0 900 230" role="img" aria-label="Baseline decision flow">
+        <path class="g-edge" id="e1" d="M150 115 L 250 115"/>
+        <path class="g-edge" id="e2" d="M420 115 L 520 115"/>
+        <path class="g-edge" id="e3" d="M335 70 C 335 30, 520 30, 600 40"/>
+        <path class="g-edge" id="e4" d="M690 115 L 740 60"/>
+        <path class="g-edge" id="e5" d="M690 115 L 740 170"/>
+        <path class="g-edge" id="e6" d="M335 160 C 335 205, 600 210, 740 190"/>
+        <g class="g-node" id="n1"><rect x="20" y="85" width="130" height="60" rx="8"/><text class="svg-label" x="85" y="112" text-anchor="middle" id="t-n1">failure found</text><text class="svg-sub" x="85" y="130" text-anchor="middle">op + check + signature</text></g>
+        <g class="g-node" id="n2"><rect x="250" y="70" width="170" height="90" rx="8"/><text class="svg-label" x="335" y="110" text-anchor="middle" id="t-n2">in baseline.json?</text><text class="svg-sub" x="335" y="128" text-anchor="middle">identity match</text></g>
+        <g class="g-node" id="n3"><rect x="520" y="85" width="170" height="60" rx="8"/><text class="svg-label" x="605" y="112" text-anchor="middle" id="t-n3">expires passed?</text><text class="svg-sub" x="605" y="130" text-anchor="middle">"expires": "YYYY-MM-DD"</text></g>
+        <g class="g-node" id="n0"><rect x="600" y="10" width="140" height="40" rx="8"/><text class="svg-sub" x="670" y="34" text-anchor="middle">no → new</text></g>
+        <g class="g-node ok" id="n4"><rect x="740" y="30" width="140" height="60" rx="8"/><text class="svg-label" x="810" y="57" text-anchor="middle" id="t-n4">known</text><text class="svg-sub" x="810" y="75" text-anchor="middle">exit 0 · CI green</text></g>
+        <g class="g-node bad" id="n5"><rect x="740" y="150" width="140" height="60" rx="8"/><text class="svg-label" x="810" y="177" text-anchor="middle" id="t-n5">new</text><text class="svg-sub" x="810" y="195" text-anchor="middle">exit 1 · CI red</text></g>
+      </svg>
+    </div>
+    <div class="verdict" id="gate-verdict"></div>
+  </section>
+
+  <section class="station" id="compare">
+    <header>
+      <span class="eyebrow" lang="ru">Место в наборе инструментов</span><span class="eyebrow" lang="en">Where it fits</span>
+      <h2 lang="ru">Чем отличается от того, что уже есть в репозитории</h2><h2 lang="en">How it differs from what the repo already has</h2>
+    </header>
+    <div class="compare">
+      <table class="cmp">
+        <thead><tr><th></th><th>Playwright API tests</th><th class="hl">Schemathesis</th><th>Pact <span lang="ru">(в планах)</span><span lang="en">(planned)</span></th><th>OWASP / ZAP</th></tr></thead>
+        <tbody>
+          <tr><td lang="ru">Вопрос</td><td lang="en">Question</td>
+            <td><span lang="ru">Работает ли бизнес-логика?</span><span lang="en">Does the business logic work?</span></td>
+            <td class="hl"><span lang="ru">Совпадает ли сервер со своей спецификацией на любых входных данных?</span><span lang="en">Does the server match its spec for any input?</span></td>
+            <td><span lang="ru">Совместимы ли потребитель и поставщик?</span><span lang="en">Are consumer and provider compatible?</span></td>
+            <td><span lang="ru">Можно ли это взломать?</span><span lang="en">Can it be attacked?</span></td></tr>
+          <tr><td lang="ru">Кто пишет кейсы</td><td lang="en">Who writes cases</td>
+            <td><span lang="ru">инженер</span><span lang="en">engineer</span></td><td class="hl"><span lang="ru">генератор по OpenAPI</span><span lang="en">generator from OpenAPI</span></td>
+            <td><span lang="ru">потребитель, в коде</span><span lang="en">consumer, in code</span></td><td><span lang="ru">сканер + инженер</span><span lang="en">scanner + engineer</span></td></tr>
+          <tr><td lang="ru">Оракул</td><td lang="en">Oracle</td>
+            <td><span lang="ru">точные ожидания</span><span lang="en">exact expectations</span></td><td class="hl"><span lang="ru">общие свойства + схема</span><span lang="en">general properties + schema</span></td>
+            <td><span lang="ru">контракт-файл</span><span lang="en">contract file</span></td><td><span lang="ru">правила уязвимостей</span><span lang="en">vulnerability rules</span></td></tr>
+          <tr><td lang="ru">Объём</td><td lang="en">Volume</td><td>~100</td><td class="hl">~3 600 / run</td><td><span lang="ru">десятки взаимодействий</span><span lang="en">tens of interactions</span></td><td><span lang="ru">сотни атак</span><span lang="en">hundreds of attacks</span></td></tr>
+          <tr><td lang="ru">Лучше всего ловит</td><td lang="en">Best at</td>
+            <td><span lang="ru">регрессии сценариев</span><span lang="en">scenario regressions</span></td><td class="hl"><span lang="ru">дрейф контракта, 500 на странных данных</span><span lang="en">contract drift, 500s on odd data</span></td>
+            <td><span lang="ru">ломающие изменения до деплоя</span><span lang="en">breaking changes before deploy</span></td><td><span lang="ru">BOLA, инъекции, заголовки</span><span lang="en">BOLA, injection, headers</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="station" id="run">
+    <header>
+      <span class="eyebrow" lang="ru">Запуск</span><span class="eyebrow" lang="en">Run it</span>
+      <h2 lang="ru">Локально за четыре команды</h2><h2 lang="en">Locally in four commands</h2>
+      <p lang="ru">Нужны Docker Desktop и Python 3.10+. В CI то же самое делает <code>.github/workflows/fuzz.yml</code> каждую ночь и при изменениях в <code>fuzz/</code>.</p>
+      <p lang="en">Needs Docker Desktop and Python 3.10+. In CI, <code>.github/workflows/fuzz.yml</code> does the same nightly and on changes to <code>fuzz/</code>.</p>
+    </header>
+    <div class="panel" id="cmds"></div>
+  </section>
+
+  <section class="station" id="terms">
+    <header>
+      <span class="eyebrow" lang="ru">Словарь</span><span class="eyebrow" lang="en">Glossary</span>
+      <h2 lang="ru">Термины</h2><h2 lang="en">Terms</h2>
+    </header>
+    <dl class="terms" id="glossary"></dl>
+  </section>
+
+  <footer>
+    <a href="https://github.com/NailKarimov/api-test-automation/blob/main/docs/schemathesis.md">docs/schemathesis.md</a>
+    <a href="https://nailkarimov.github.io/api-test-automation/fuzz/" lang="ru">HTML-отчёт последнего прогона</a>
+    <a href="https://nailkarimov.github.io/api-test-automation/fuzz/" lang="en">Latest run HTML report</a>
+    <a href="https://schemathesis.io">schemathesis.io</a>
+    <span>Schemathesis 4.31.1 · 17.10.2026</span>
+  </footer>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const L = { lang: 'ru' };
+const t = (ru, en) => (L.lang === 'ru' ? ru : en);
+
+/* ---------- language ---------- */
+function setLang(l) {
+  L.lang = l;
+  document.body.dataset.lang = l;
+  document.documentElement.lang = l;
+  document.querySelectorAll('.langs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.l === l)));
+  try { localStorage.setItem('st-lang', l); } catch (e) {}
+  renderAll();
+}
+document.querySelectorAll('.langs button').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.l)));
+
+/* ---------- pipeline animation ---------- */
+const svgNS = 'http://www.w3.org/2000/svg';
+const pOut = document.getElementById('p-out'), pBack = document.getElementById('p-back');
+const lenOut = pOut.getTotalLength(), lenBack = pBack.getTotalLength();
+const layer = document.getElementById('particles');
+const counts = { pass: 0, known: 0, new: 0 };
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let running = !reduce, parts = [], last = 0, spawnAcc = 0;
+// Illustrative mix: most requests pass, some hit known defects, a rare one is new.
+function outcome() { const r = Math.random(); return r < 0.84 ? 'pass' : r < 0.985 ? 'known' : 'new'; }
+const bins = { pass: 70, known: 150, new: 230 };
+function spawn() {
+  const c = document.createElementNS(svgNS, 'circle');
+  c.setAttribute('r', '4.5'); c.setAttribute('fill', 'var(--accent)');
+  layer.appendChild(c);
+  parts.push({ c, s: 0, o: outcome(), y0: 70 + Math.random() * 80 });
+}
+function place(p) {
+  let x, y;
+  if (p.s < 1) { const pt = pOut.getPointAtLength(p.s * lenOut); x = pt.x; y = pt.y + (p.y0 - 110) * 0.15 * (1 - p.s); }
+  else if (p.s < 1.25) { x = 520 + (p.s - 1) * 4 * 80; y = 110 + (p.s - 1) * 4 * 80; }
+  else if (p.s < 2) { const pt = pBack.getPointAtLength(((p.s - 1.25) / 0.75) * lenBack); x = pt.x; y = pt.y; }
+  else if (p.s < 2.4) { const k = (p.s - 2) / 0.4; x = 730; y = 160 + k * 60; }
+  else { const k = Math.min(1, (p.s - 2.4) / 0.6); x = 730 + k * 132; y = 220 + (bins[p.o] - 220) * k; }
+  p.c.setAttribute('cx', x.toFixed(1)); p.c.setAttribute('cy', y.toFixed(1));
+  if (p.s >= 2.2) p.c.setAttribute('fill', `var(--${p.o})`);
+}
+function tick(ts) {
+  const dt = Math.min(50, ts - (last || ts)); last = ts;
+  if (running) {
+    spawnAcc += dt; while (spawnAcc > 140) { spawn(); spawnAcc -= 140; }
+    parts.forEach((p) => { p.s += dt / 1400; place(p); });
+    parts = parts.filter((p) => { if (p.s >= 3) { counts[p.o]++; p.c.remove(); return false; } return true; });
+    for (const k in counts) document.getElementById('c-' + k).textContent = counts[k].toLocaleString();
+  }
+  requestAnimationFrame(tick);
+}
+// Visible resting state for thumbnails and reduced motion: a few requests frozen along the way.
+for (let i = 0; i < 14; i++) { spawn(); parts[i].s = i * 0.21; place(parts[i]); }
+for (const k in counts) document.getElementById('c-' + k).textContent = counts[k].toLocaleString();
+requestAnimationFrame(tick);
+document.getElementById('pipe-toggle').addEventListener('click', (e) => {
+  running = !running;
+  e.currentTarget.innerHTML = running ? '<span lang="ru">Пауза</span><span lang="en">Pause</span>' : '<span lang="ru">Запустить</span><span lang="en">Play</span>';
+});
+
+/* ---------- example vs property dots ---------- */
+const dots = document.getElementById('dots');
+for (let i = 0; i < 200; i++) dots.appendChild(document.createElement('span'));
+let bad = 0;
+function regen() {
+  bad = 0;
+  dots.querySelectorAll('span').forEach((d) => { const b = Math.random() < 0.035; d.classList.toggle('bad', b); bad += b; });
+  renderDotsCaption();
+}
+function renderDotsCaption() {
+  document.getElementById('dots-caption').textContent = t(
+    `200 запросов, придуманных генератором. Красных: ${bad}, это нарушения правила. Каждый Schemathesis сожмёт до минимального запроса и выдаст curl для воспроизведения.`,
+    `200 requests invented by the generator. Red: ${bad}, each one breaks the rule. Schemathesis shrinks every one to the smallest request and prints a curl to reproduce it.`);
+}
+document.getElementById('regen').addEventListener('click', regen);
+
+/* ---------- phases ---------- */
+const PHASES = [
+  { id: 'examples', ru: 'examples', en: 'examples',
+    d: ['Запросы из полей <code>example</code>, которые авторы написали в спецификации. Самая быстрая проверка: работает ли API на собственных примерах.', 'Requests built from the <code>example</code> values the authors wrote into the spec. The quickest check: does the API work on its own examples?'],
+    code: `<span class="c"># from components.schemas.Pet.example</span>
+curl -X POST http://localhost:8090/api/v3/pet \\
+  -H 'Content-Type: application/json' \\
+  -d '{"id":10,"name":"doggie","photoUrls":[],"status":"available"}'
+<span class="g">→ 200 OK, response matches the Pet schema</span>` },
+  { id: 'coverage', ru: 'coverage', en: 'coverage',
+    d: ['Границы и заведомые нарушения, выведенные из схемы: min/max, пустые строки, отсутствующие обязательные поля, неверные типы. По сути автоматический анализ граничных значений и классов эквивалентности.', 'Boundaries and deliberate violations derived from the schema: min/max, empty strings, missing required fields, wrong types. Boundary value analysis and equivalence partitioning, automated.'],
+    code: `<span class="c"># complete is boolean in the spec; the generator sends 0.5</span>
+curl -X POST http://localhost:8090/api/v3/store/order \\
+  -H 'Content-Type: application/x-www-form-urlencoded' \\
+  -d 'id=10&petId=198772&quantity=7&status=approved&complete=0.5'
+<span class="r">→ 500 Internal Server Error          FZ-1
+  documented: 200, 405                 FZ-2</span>` },
+  { id: 'fuzzing', ru: 'fuzzing', en: 'fuzzing',
+    d: ['Случайные данные, похожие на правильные или специально сломанные, плюс HTTP-методы, которых нет в спецификации. Здесь находятся самые неожиданные ошибки.', 'Random data that looks valid or is deliberately broken, plus HTTP methods the spec does not declare. The most surprising bugs show up here.'],
+    code: `<span class="c"># TRACE is not declared for /user</span>
+curl -X TRACE http://localhost:8090/api/v3/user
+<span class="r">→ 403 Forbidden   expected 405 Method Not Allowed   FZ-7</span>
+
+curl -X QUERY http://localhost:8090/api/v3/user
+<span class="r">→ 405 without the Allow header (RFC 9110)           FZ-7</span>` },
+  { id: 'stateful', ru: 'stateful', en: 'stateful',
+    d: ['Цепочки вызовов: ответ одного запроса становится входом следующего. Связи берутся из OpenAPI links и из того, как называются параметры.', 'Chains of calls: one response feeds the next request. Links come from OpenAPI links and from how parameters are named.'],
+    chain: true,
+    code: `POST /pet            <span class="g">→ 200 {"id": 4721, …}</span>
+GET  /pet/4721       <span class="r">→ 200, but "photoUrls" (required) is missing   FZ-3</span>
+DELETE /pet/4721     <span class="g">→ 200</span>
+GET  /pet/4721       <span class="g">→ 404 — use_after_free check passes</span>` },
+];
+let phase = 'coverage';
+function renderPhases() {
+  const tabs = document.getElementById('phase-tabs');
+  tabs.innerHTML = PHASES.map((p, i) => `<button type="button" role="tab" id="ph-${p.id}" aria-selected="${p.id === phase}">${i + 1}. ${p.id}</button>`).join('');
+  tabs.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { phase = b.id.slice(3); renderPhases(); }));
+  const p = PHASES.find((x) => x.id === phase);
+  document.getElementById('phase-panel').innerHTML = `<div style="display:grid;gap:12px;align-content:start"><h3>${p.id}</h3><p>${t(p.d[0], p.d[1])}</p>${p.chain ? '<div class="chain"><span>POST /pet</span><em>→ id →</em><span>GET /pet/{id}</span><em>→</em><span>DELETE</span><em>→</em><span>GET → 404</span></div>' : ''}</div><pre>${p.code}</pre>`;
+}
+
+/* ---------- results matrix ---------- */
+const M = {"POST /pet":{"FZ-4":1,"FZ-1":1,"FZ-5":1,"FZ-3":4,"FZ-2":2,"FZ-7":1},"PUT /pet":{"FZ-4":1,"FZ-1":1,"FZ-5":1,"FZ-3":4,"FZ-2":1},"GET /pet/findByStatus":{"FZ-5":1,"FZ-3":2,"FZ-7":1},"GET /pet/findByTags":{"FZ-1":1,"FZ-5":1,"FZ-2":1,"FZ-7":1},"DELETE /pet/{petId}":{"FZ-2":1},"GET /pet/{petId}":{"FZ-6":1,"FZ-3":3},"POST /pet/{petId}":{"FZ-5":1,"FZ-2":3,"FZ-7":1},"POST /pet/{petId}/uploadImage":{"FZ-1":1,"FZ-2":3,"FZ-7":1},"GET /store/inventory":{"FZ-6":2,"FZ-4":1,"FZ-1":1,"FZ-2":1,"FZ-7":1},"POST /store/order":{"FZ-4":1,"FZ-1":1,"FZ-5":1,"FZ-3":1,"FZ-2":2,"FZ-7":2},"DELETE /store/order/{orderId}":{"FZ-2":1},"GET /store/order/{orderId}":{"FZ-3":1,"FZ-7":2},"POST /user":{"FZ-4":1,"FZ-1":1,"FZ-5":1,"FZ-7":2},"POST /user/createWithList":{"FZ-1":1,"FZ-5":1,"FZ-3":1,"FZ-7":2},"GET /user/login":{"FZ-8":1,"FZ-3":1,"FZ-7":2},"GET /user/logout":{"FZ-7":2},"DELETE /user/{username}":{"FZ-1":1,"FZ-2":1},"GET /user/{username}":{"FZ-1":1,"FZ-2":1},"PUT /user/{username}":{"FZ-1":1,"FZ-5":1,"FZ-7":2}};
+const FZ = {
+  'FZ-1': ['not_a_server_error', '500 на неожиданный ввод вместо 4xx', '500 on unexpected input instead of a 4xx'],
+  'FZ-2': ['status_code_conformance', 'код ответа, которого нет в спецификации (дрейф контракта)', 'status code the spec does not list (contract drift)'],
+  'FZ-3': ['response_schema_conformance', 'тело ответа нарушает схему: нет photoUrls, неверный enum', 'response body breaks the schema: no photoUrls, invalid enum'],
+  'FZ-4': ['negative_data_rejection', 'неправильные данные приняты с 200', 'invalid data accepted with 200'],
+  'FZ-5': ['positive_data_acceptance', 'правильные данные отклонены с 400', 'valid data rejected with 400'],
+  'FZ-6': ['ignored_auth', 'api_key объявлен, но не нужен', 'api_key declared but not required'],
+  'FZ-7': ['unsupported_method', 'TRACE → 403 вместо 405; 405 без Allow', 'TRACE → 403 instead of 405; 405 without Allow'],
+  'FZ-8': ['response_headers_conformance', 'X-Expires-After не в формате date-time', 'X-Expires-After is not a date-time'],
+};
+function heat(n) { return n === 0 ? '' : `background: color-mix(in srgb, var(--new) ${Math.min(90, 20 + n * 18)}%, var(--surface)); color: ${n >= 3 ? 'var(--surface)' : 'var(--ink)'}`; }
+function renderMatrix() {
+  const cols = Object.keys(FZ);
+  let h = '<thead><tr><th>' + t('операция', 'operation') + '</th>' + cols.map((c) => `<th title="${FZ[c][0]}">${c}</th>`).join('') + '<th>Σ</th></tr></thead><tbody>';
+  for (const [op, row] of Object.entries(M)) {
+    const [m, path] = op.split(' ');
+    const sum = Object.values(row).reduce((a, b) => a + b, 0);
+    h += `<tr><th><span class="method">${m}</span>${path}</th>` + cols.map((c) => { const n = row[c] || 0; return `<td class="${n ? '' : 'z'}" style="${heat(n)}" data-op="${op}" data-fz="${c}" data-n="${n}">${n || '·'}</td>`; }).join('') + `<td style="font-weight:600">${sum}</td></tr>`;
+  }
+  h += '</tbody>';
+  document.getElementById('matrix').innerHTML = h;
+  document.getElementById('fzlist').innerHTML = cols.map((c) => `<div class="fz"><b>${c}</b><span><code>${FZ[c][0]}</code> · ${t(FZ[c][1], FZ[c][2])}</span></div>`).join('');
+}
+const tip = document.getElementById('tip');
+document.getElementById('matrix').addEventListener('mousemove', (e) => {
+  const td = e.target.closest('td[data-fz]');
+  if (!td || td.dataset.n === '0') { tip.hidden = true; return; }
+  const f = FZ[td.dataset.fz];
+  tip.innerHTML = `<b>${td.dataset.op}</b><br>${td.dataset.fz} · ${f[0]} × ${td.dataset.n}<br>${t(f[1], f[2])}`;
+  tip.hidden = false;
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - 310) + 'px';
+  tip.style.top = e.clientY + 14 + 'px';
+});
+document.getElementById('matrix').addEventListener('mouseleave', () => (tip.hidden = true));
+
+/* ---------- baseline gate ---------- */
+const GATE = {
+  known: { ru: 'Известный дефект', en: 'Known defect', path: ['n1', 'e1', 'n2', 'e2', 'n3', 'e4', 'n4'],
+    v: ['FZ-7 TRACE → 403 есть в baseline.json, срок не задан. Прогон помечает его как known, exit 0, CI зелёный, дефект виден в отчёте.', 'FZ-7 TRACE → 403 is in baseline.json with no expiry. Reported as known, exit 0, CI green, still visible in the report.'] },
+  new: { ru: 'Новая ошибка', en: 'New failure', path: ['n1', 'e1', 'n2', 'e3', 'n0', 'e6', 'n5'],
+    v: ['После обновления Petstore DELETE /pet/{id} начал отвечать 500. Такого identity нет в baseline: exit 1, CI красный, в аннотации готовый curl.', 'After a Petstore update DELETE /pet/{id} starts answering 500. That identity is not in the baseline: exit 1, CI red, the annotation holds a ready curl.'] },
+  expired: { ru: 'Срок истёк', en: 'Expired entry', path: ['n1', 'e1', 'n2', 'e2', 'n3', 'e5', 'n5'],
+    v: ['У записи стоит "expires": "2026-12-31". После этой даты дефект снова считается новым: напоминание перепроверить, не исправили ли его.', 'The entry has "expires": "2026-12-31". After that date the failure counts as new again: a reminder to re-check whether it was fixed.'] },
+};
+let gate = 'new';
+function renderGate() {
+  const tabs = document.getElementById('gate-tabs');
+  tabs.innerHTML = Object.entries(GATE).map(([k, g]) => `<button type="button" id="g-${k}" aria-selected="${k === gate}">${t(g.ru, g.en)}</button>`).join('');
+  tabs.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { gate = b.id.slice(2); renderGate(); }));
+  document.querySelectorAll('.g-node, .g-edge').forEach((el) => el.classList.remove('on'));
+  GATE[gate].path.forEach((id) => document.getElementById(id).classList.add('on'));
+  document.getElementById('gate-verdict').textContent = t(...GATE[gate].v);
+  const labels = { 't-n1': ['ошибка найдена', 'failure found'], 't-n2': ['есть в baseline.json?', 'in baseline.json?'], 't-n3': ['срок expires прошёл?', 'expires passed?'], 't-n4': ['известная', 'known'], 't-n5': ['новая', 'new'] };
+  for (const [id, v] of Object.entries(labels)) document.getElementById(id).textContent = t(...v);
+}
+
+/* ---------- commands and glossary ---------- */
+const CMDS = [
+  ['pip install -r fuzz/requirements.txt', 'один раз: Schemathesis 4.31.1', 'once: Schemathesis 4.31.1'],
+  ['npm run fuzz:up', 'своя копия Petstore на :8090', 'private Petstore on :8090'],
+  ['npm run fuzz', 'прогон, отчёты в schemathesis-report/', 'run; reports in schemathesis-report/'],
+  ['npm run fuzz:down', 'остановить и удалить контейнер', 'stop and remove the container'],
+];
+function renderCmds() {
+  document.getElementById('cmds').innerHTML = CMDS.map((c, i) => `<div style="display:grid;gap:4px"><span class="eyebrow">${t(c[1], c[2])}</span><div class="cmd"><code>${c[0]}</code><button type="button" id="cp-${i}" data-c="${c[0]}">${t('Копировать', 'Copy')}</button></div></div>`).join('') +
+    `<p class="muted">${t('Принять текущие ошибки в baseline: <code>npm run fuzz:baseline</code> или ручной запуск workflow с галочкой <b>record baseline</b>. Перед коммитом обязательно посмотрите diff.', 'Accept current failures: <code>npm run fuzz:baseline</code> or a manual workflow run with <b>record baseline</b> ticked. Always read the diff before committing.')}</p>`;
+  document.querySelectorAll('.cmd button').forEach((b) => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.dataset.c); b.textContent = t('Скопировано', 'Copied'); }
+    catch (e) { const r = document.createRange(); r.selectNodeContents(b.previousElementSibling); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  }));
+}
+const TERMS = [
+  ['Property-based testing', 'Тест задаёт правило, которое верно для любых входных данных, а данные генерирует фреймворк.', 'The test states a rule that holds for every input; the framework generates the inputs.'],
+  ['Fuzzing', 'Отправка большого количества неожиданных и некорректных данных, чтобы найти падения и необработанные случаи.', 'Sending large amounts of unexpected or invalid data to find crashes and unhandled cases.'],
+  ['Oracle (оракул)', 'Способ, которым тест решает, прошёл он или нет. Здесь оракул — сама OpenAPI-спецификация.', 'How a test decides pass or fail. Here the oracle is the OpenAPI document itself.'],
+  ['Shrinking', 'Сокращение упавшего запроса до минимального, который всё ещё падает. Так проще понять причину.', 'Reducing a failing input to the smallest one that still fails, so the cause is obvious.'],
+  ['Stateful testing', 'Проверка цепочек вызовов, где ответ одного запроса становится входом следующего.', 'Testing sequences of calls where one response feeds the next request.'],
+  ['Contract drift (дрейф контракта)', 'Сервер и его документация перестали совпадать. Главное, что находит Schemathesis на Petstore.', 'The server and its documentation no longer agree. The main thing Schemathesis finds on Petstore.'],
+  ['Baseline', 'Список принятых ошибок. Красными становятся только ошибки, которых в нём нет.', 'The list of accepted failures; only failures outside it turn the build red.'],
+  ['Deterministic mode', 'Одинаковые запросы в каждом прогоне. Новая ошибка значит, что изменился API, а не что выпал другой случай.', 'The same requests every run, so a new failure means the API changed, not that the dice rolled differently.'],
+  ['Hypothesis', 'Python-библиотека property-based тестирования, на которой построен Schemathesis.', 'The Python property-based testing library Schemathesis is built on.'],
+  ['RFC 9110', 'Стандарт семантики HTTP. Требует заголовок Allow в ответе 405, отсюда часть находок FZ-7.', 'The HTTP semantics standard. It requires an Allow header on 405, hence part of FZ-7.'],
+];
+function renderTerms() {
+  document.getElementById('glossary').innerHTML = TERMS.map((x) => `<div><dt>${x[0]}</dt><dd>${t(x[1], x[2])}</dd></div>`).join('');
+}
+
+function renderAll() {
+  renderDotsCaption(); renderPhases(); renderMatrix(); renderGate(); renderCmds(); renderTerms();
+  const sv = { 'gen-label': ['генератор', 'generator'], 'checks-label': ['проверки', 'checks'], 'l-pass': ['прошли', 'passed'], 'l-known': ['baseline', 'baseline'], 'l-new': ['новые → CI красный', 'new → CI red'] };
+  for (const [id, v] of Object.entries(sv)) document.getElementById(id).textContent = t(...v);
+}
+let start = 'ru';
+try { start = localStorage.getItem('st-lang') || document.documentElement.dataset.defaultLang || 'ru'; } catch (e) {}
+regen();
+setLang(start);
+</script>
+</body>
+</html>
