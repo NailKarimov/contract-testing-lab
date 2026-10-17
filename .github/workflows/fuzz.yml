@@ -1,0 +1,91 @@
+name: Fuzz (Schemathesis)
+
+# Property-based tests generated from the Petstore OpenAPI document (see docs/schemathesis.md).
+# Runs against a private Petstore container, never the public sandbox.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'fuzz/**'
+      - 'infra/petstore/**'
+      - 'scripts/fuzz-summary.mjs'
+      - '.github/workflows/fuzz.yml'
+  schedule:
+    - cron: '30 3 * * *' # nightly, after the main test run
+  workflow_dispatch:
+    inputs:
+      record_baseline:
+        description: 'Record the current failures into fuzz/baseline.json (shown as an annotation) instead of failing'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # publish the HTML report to gh-pages/fuzz
+
+concurrency:
+  group: fuzz
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: fuzz/requirements.txt
+
+      - name: Install Schemathesis
+        run: pip install -r fuzz/requirements.txt
+
+      - name: Start a private Petstore (Docker)
+        run: docker compose -f infra/petstore/docker-compose.yml up -d --wait
+
+      - name: Run Schemathesis
+        id: st
+        continue-on-error: true
+        run: >
+          st --config-file fuzz/schemathesis.toml run http://localhost:8090/api/v3/openapi.json
+          --wait-for-schema 60 ${{ inputs.record_baseline && '--baseline-update' || '' }}
+
+      - name: Summary and annotations
+        if: always()
+        env:
+          RECORD_BASELINE: ${{ inputs.record_baseline }}
+        run: node scripts/fuzz-summary.mjs
+
+      - name: Publish the HTML report to GitHub Pages (/fuzz)
+        if: always() && github.ref == 'refs/heads/main' && hashFiles('schemathesis-report/html/index.html') != ''
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: schemathesis-report/html
+          destination_dir: fuzz
+          keep_files: true
+
+      - name: Upload the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schemathesis-report
+          path: |
+            schemathesis-report
+            fuzz/baseline.json
+          retention-days: 30
+
+      - name: Petstore logs (only when something failed)
+        if: steps.st.outcome == 'failure'
+        run: docker compose -f infra/petstore/docker-compose.yml logs --no-color --tail 100
+
+      - name: Stop the Petstore
+        if: always()
+        run: docker compose -f infra/petstore/docker-compose.yml down -v
+
+      - name: Fail the job on new failures
+        if: steps.st.outcome == 'failure' && inputs.record_baseline != true
+        run: exit 1

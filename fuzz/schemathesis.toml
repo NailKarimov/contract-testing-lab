@@ -1,0 +1,49 @@
+# Schemathesis: property-based tests generated from the Petstore OpenAPI spec.
+# Runs against a local Petstore container (infra/petstore), never the public sandbox:
+# fuzzing sends thousands of requests, and a container gives every run clean, isolated data.
+# Docs: docs/schemathesis.md
+
+# Same seed → same generated requests, so a finding in CI can be reproduced locally.
+seed = 20261017
+# One worker: the stateful phase shares server data, and a fixed order keeps runs reproducible.
+workers = 1
+# Keep testing an operation after its first failure, so one run records every failure at once
+# (otherwise a known failure hides the next one and the baseline never settles).
+continue-on-failure = true
+request-timeout = 10
+# Failures accepted on purpose (known defects of the SUT). Each entry carries a defect id;
+# a new failure that is not in this file fails the CI job.
+baseline = "fuzz/baseline.json"
+
+[generation]
+# Both valid and deliberately invalid requests.
+mode = "all"
+max-examples = 50
+# Same inputs on every run, so the CI gate only reacts to changes in the API, not to luck.
+deterministic = true
+
+[phases]
+# examples: requests built from `example` values in the spec
+# coverage: boundary values and missing/extra fields derived from the schema
+# fuzzing:  random data matching (or breaking) the schema
+# stateful: chains of calls linked by OpenAPI links (create → read → delete)
+enabled = true
+
+[checks]
+enabled = true
+
+# Paths are relative to the directory the command runs from (the repository root, see npm run fuzz).
+[reports]
+directory = "schemathesis-report"
+
+[reports.junit]
+enabled = true
+path = "schemathesis-report/junit.xml"
+
+[reports.json]
+enabled = true
+path = "schemathesis-report/report.json"
+
+[reports.html]
+enabled = true
+path = "schemathesis-report/html"

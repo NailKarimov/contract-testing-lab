@@ -1,0 +1,15 @@
+# A private Swagger Petstore for the Schemathesis run (npm run fuzz:up).
+# Fuzzing sends thousands of requests, including deliberately broken ones: that belongs on an
+# isolated copy that starts with clean data, not on the public sandbox other people use.
+services:
+  petstore:
+    # The image the swagger-petstore README documents; it is the same code as petstore3.swagger.io.
+    image: swaggerapi/petstore3:unstable
+    container_name: fuzz-petstore
+    ports:
+      - '8090:8080'
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://localhost:8080/api/v3/openapi.json']
+      interval: 3s
+      timeout: 3s
+      retries: 40
