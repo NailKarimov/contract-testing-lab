@@ -1,0 +1,11 @@
+# Accepted breaking drift between the approved contract (contracts/petstore/openapi.yaml, swagger-petstore
+# master 1.0.29-SNAPSHOT) and the spec served by the swaggerapi/petstore3:unstable container.
+# oasdiff --err-ignore: each line = METHOD /path + the change description; extra text (the id) is allowed.
+# A new breaking change that is not listed here fails the nightly job. See docs/contract-drift.md.
+CD-1 PUT /user/{username} removed the success response with the status `200`
+CD-1 DELETE /user/{username} removed the success response with the status `200`
+CD-1 GET /user/logout removed the success response with the status `200`
+CD-1 POST /user removed the success response with the status `200`
+CD-1 DELETE /store/order/{orderId} removed the success response with the status `200`
+CD-1 POST /pet/{petId} removed the success response with the status `200`
+CD-1 DELETE /pet/{petId} removed the success response with the status `200`

@@ -70,22 +70,27 @@ jobs:
           curl -fsS http://localhost:8090/api/v3/openapi.json -o contract-report/container.json
           curl -fsS https://petstore3.swagger.io/api/v3/openapi.json -o contract-report/public.json \
             || echo "::warning title=Public sandbox::could not download its spec"
+          echo "::notice title=Spec versions::approved $(yq -r .info.version "$CONTRACT"), container $(jq -r .info.version contract-report/container.json), public $(jq -r .info.version contract-report/public.json 2>/dev/null)"
 
-      - name: Gate — container vs approved contract
-        id: gate
-        continue-on-error: true
-        run: |
-          oasdiff breaking "$CONTRACT" contract-report/container.json --fail-on ERR --format githubactions
-          oasdiff breaking "$CONTRACT" contract-report/container.json --format markdown > contract-report/container-breaking.md
-          oasdiff changelog "$CONTRACT" contract-report/container.json --format html > contract-report/container.html
-
-      - name: Watch — public sandbox vs approved contract (report only)
+      - name: Reports — container and public sandbox vs approved contract
         if: always()
         run: |
-          [ -s contract-report/public.json ] || exit 0
-          oasdiff changelog "$CONTRACT" contract-report/public.json --format html > contract-report/public.html
-          oasdiff changelog "$CONTRACT" contract-report/public.json --format markdown > contract-report/public.md
-          echo "::notice title=Public sandbox drift::$(oasdiff changelog "$CONTRACT" contract-report/public.json --format singleline | wc -l) change(s) vs the approved contract"
+          changes() { oasdiff changelog "$CONTRACT" "$1" --format json | jq length; }
+          oasdiff changelog "$CONTRACT" contract-report/container.json --format html > contract-report/container.html
+          oasdiff breaking "$CONTRACT" contract-report/container.json --format markdown > contract-report/container-breaking.md
+          echo "::notice title=Container drift::$(changes contract-report/container.json) change(s) vs the approved contract (accepted ones are listed in known-drift.txt)"
+          if [ -s contract-report/public.json ]; then
+            oasdiff changelog "$CONTRACT" contract-report/public.json --format html > contract-report/public.html
+            oasdiff changelog "$CONTRACT" contract-report/public.json --format markdown > contract-report/public.md
+            echo "::notice title=Public sandbox drift::$(changes contract-report/public.json) change(s) vs the approved contract (report only)"
+          fi
+
+      - name: Gate — container vs approved contract, minus accepted drift
+        id: gate
+        continue-on-error: true
+        run: >
+          oasdiff breaking "$CONTRACT" contract-report/container.json
+          --err-ignore contracts/petstore/known-drift.txt --fail-on ERR --format githubactions
 
       - name: Job summary
         if: always()
@@ -93,7 +98,7 @@ jobs:
           {
             echo '## Contract drift — Swagger Petstore'
             echo
-            echo '### Container vs approved contract (gate)'
+            echo '### Container vs approved contract (accepted drift: contracts/petstore/known-drift.txt)'
             if [ -s contract-report/container-breaking.md ]; then cat contract-report/container-breaking.md; else echo 'No breaking changes.'; fi
             echo
             echo '### Public sandbox vs approved contract (report only)'
