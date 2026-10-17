@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en" data-default-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pact: Pet Adoption Web и Petstore</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a handshake across a table. Consumer on the left, provider on the right, the pact file in
+   the middle. One replayable sequence carries the story; then the interactions, what-if breakage, CI. */
+:root {
+  --bg: #eef1f5; --surface: #ffffff; --sunken: #e3e8ef; --ink: #121823; --muted: #586274; --line: #cfd6e1;
+  --consumer: #2550b8; --consumer-soft: #dde6fb; --provider: #0f7a72; --provider-soft: #d6f1ee; --pact: #8a4bb5; --pact-soft: #efe3f8;
+  --ok: #1f7a4d; --ok-soft: #dcf1e5; --bad: #b42318; --bad-soft: #fbe2df;
+  --font-display: 'Familjen Grotesk', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d121a; --surface: #151c27; --sunken: #1b2431; --ink: #e7ecf3; --muted: #9aa6b8; --line: #2a3546;
+    --consumer: #7ea2ff; --consumer-soft: #1c2a4d; --provider: #4fd1c5; --provider-soft: #10302d; --pact: #c79bff; --pact-soft: #2c1d40;
+    --ok: #5fd394; --ok-soft: #12321f; --bad: #ff8a7d; --bad-soft: #3d1714;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d121a; --surface: #151c27; --sunken: #1b2431; --ink: #e7ecf3; --muted: #9aa6b8; --line: #2a3546;
+  --consumer: #7ea2ff; --consumer-soft: #1c2a4d; --provider: #4fd1c5; --provider-soft: #10302d; --pact: #c79bff; --pact-soft: #2c1d40;
+  --ok: #5fd394; --ok-soft: #12321f; --bad: #ff8a7d; --bad-soft: #3d1714;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.6 var(--font-body); margin: 0; }
+body[data-lang="ru"] [lang="en"], body[data-lang="en"] [lang="ru"] { display: none !important; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(32px, 5vw, 50px); font-weight: 700; }
+h2 { font-size: clamp(23px, 3vw, 31px); font-weight: 700; }
+h3 { font-size: 18px; font-weight: 700; }
+p { margin: 0; max-width: 70ch; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+a { color: var(--consumer); }
+:focus-visible { outline: 2px solid var(--consumer); outline-offset: 2px; border-radius: 4px; }
+.eyebrow { font: 500 12px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+header.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-block: 20px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.seg button { font: 500 13px var(--font-mono); background: transparent; color: var(--muted); border: 0; padding: 6px 14px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.hero { display: grid; gap: 16px; padding-block: 8px 20px; }
+.hero .lead { font-size: 18px; color: var(--muted); }
+section.station { display: grid; gap: 16px; padding-block: 44px 0; }
+section.station > header { display: grid; gap: 8px; }
+.btn { font: 500 14px var(--font-body); background: var(--ink); color: var(--bg); border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.ctl { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* handshake stage */
+.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; overflow-x: auto; }
+.stage svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.lbl { font: 600 13px var(--font-body); fill: var(--ink); }
+.sub { font: 400 11px var(--font-mono); fill: var(--muted); }
+.box { stroke-width: 1.5; }
+.n { opacity: .35; transition: opacity .35s; }
+.n.on { opacity: 1; }
+.edge { fill: none; stroke: var(--line); stroke-width: 2; transition: stroke .35s; }
+.edge.on { stroke-width: 3; }
+.cap { min-height: 52px; padding: 10px 14px; border-radius: 10px; background: var(--sunken); font-size: 15px; }
+.cap b { font-family: var(--font-mono); font-size: 13px; margin-right: 8px; }
+
+/* interactions */
+.ix { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr); gap: 14px; }
+@media (max-width: 820px) { .ix { grid-template-columns: minmax(0, 1fr); } }
+.ilist { display: grid; gap: 6px; align-content: start; }
+.ilist button { text-align: left; font: 500 14px/1.35 var(--font-body); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; display: grid; gap: 2px; }
+.ilist button small { font: 400 11.5px var(--font-mono); color: var(--muted); }
+.ilist button[aria-pressed="true"] { border-color: var(--pact); box-shadow: 0 0 0 1px var(--pact); }
+.idetail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 820px) { .idetail { grid-template-columns: minmax(0, 1fr); } }
+.col { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; border-top: 4px solid var(--c); }
+.col pre { margin: 0; background: var(--sunken); border-radius: 8px; padding: 10px; font: 400 12px/1.5 var(--font-mono); overflow-x: auto; white-space: pre; }
+.col .k { color: var(--pact); }
+.chip { display: inline-block; font: 500 11.5px var(--font-mono); padding: 2px 8px; border-radius: 6px; background: var(--pact-soft); color: var(--ink); margin: 2px 4px 2px 0; }
+
+/* what if */
+.whatif { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 14px; }
+@media (max-width: 820px) { .whatif { grid-template-columns: minmax(0, 1fr); } }
+.opts { display: grid; gap: 6px; }
+.opts button { text-align: left; font: 500 14px var(--font-body); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+.opts button[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.result { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; align-content: start; }
+.rows { display: grid; gap: 4px; }
+.row { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; font-size: 14px; padding: 6px 8px; border-radius: 6px; background: var(--sunken); }
+.row.ok { background: var(--ok-soft); } .row.ok i { color: var(--ok); }
+.row.bad { background: var(--bad-soft); } .row.bad i { color: var(--bad); }
+.row i { font-style: normal; font-weight: 700; }
+.verdict { font: 600 14px var(--font-mono); padding: 10px 12px; border-radius: 8px; }
+.verdict.ok { background: var(--ok-soft); color: var(--ok); } .verdict.bad { background: var(--bad-soft); color: var(--bad); }
+
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 820px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.compare { overflow-x: auto; }
+table.cmp { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 14px; background: var(--surface); }
+table.cmp th, table.cmp td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.cmp thead th { background: var(--sunken); font-weight: 600; font-size: 13px; }
+table.cmp .hl { background: var(--pact-soft); }
+.cmd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; background: var(--sunken); border-radius: 8px; padding: 6px 6px 6px 12px; }
+.cmd code { overflow-x: auto; white-space: nowrap; }
+.cmd button { font: 500 12px var(--font-body); border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+dl.terms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+@media (max-width: 760px) { dl.terms { grid-template-columns: minmax(0, 1fr); } }
+dl.terms div { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+dl.terms dt { font: 700 15px var(--font-display); }
+dl.terms dd { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+footer { padding-top: 40px; color: var(--muted); font-size: 13px; display: flex; gap: 16px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body data-lang="en">
+
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">api-test-automation · tests/contract-*</span>
+    <div class="seg" role="group" aria-label="Language">
+      <button type="button" id="lang-ru" data-l="ru" aria-pressed="true">RU</button>
+      <button type="button" id="lang-en" data-l="en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1 lang="ru">Pact: контракт пишет клиент, а проверяется сервер</h1>
+    <h1 lang="en">Pact: the client writes the contract, the server is checked against it</h1>
+    <p class="lead" lang="ru">Клиент «Pet Adoption Web» в тестах записывает, какие запросы он шлёт и какие поля читает. Получается файл-контракт. Затем этот файл проигрывается против настоящего Petstore. Если сервер перестал отдавать то, на что опирается клиент, проверка поставщика падает до деплоя.</p>
+    <p class="lead" lang="en">In its tests the "Pet Adoption Web" client records which requests it sends and which fields it reads. That becomes a contract file, which is then replayed against the real Petstore. If the server stops returning what the client relies on, provider verification fails before deploy.</p>
+  </section>
+
+  <section class="station" style="padding-top:4px">
+    <div class="ctl">
+      <button type="button" class="btn" id="play"><span lang="ru">Показать по шагам</span><span lang="en">Play step by step</span></button>
+      <button type="button" class="btn ghost" id="next"><span lang="ru">Следующий шаг</span><span lang="en">Next step</span></button>
+      <span class="muted mono" id="stepno" style="font-size:13px"></span>
+    </div>
+    <div class="stage">
+      <svg viewBox="0 0 1000 300" role="img" aria-label="Consumer test, pact file, provider verification">
+        <text class="sub" x="160" y="22" text-anchor="middle" id="t-side-c">CONSUMER</text>
+        <text class="sub" x="500" y="22" text-anchor="middle">CONTRACT</text>
+        <text class="sub" x="840" y="22" text-anchor="middle" id="t-side-p">PROVIDER</text>
+        <path class="edge" id="e1" d="M230 90 L 300 90"/>
+        <path class="edge" id="e2" d="M230 200 C 300 200, 340 150, 420 150"/>
+        <path class="edge" id="e3" d="M580 150 C 650 150, 690 90, 760 90"/>
+        <path class="edge" id="e4" d="M840 120 L 840 165"/>
+        <path class="edge" id="e5" d="M760 210 C 690 230, 640 240, 580 190"/>
+        <g class="n" id="n1"><rect class="box" x="40" y="60" width="190" height="60" rx="10" fill="var(--consumer-soft)" stroke="var(--consumer)"/><text class="lbl" x="135" y="86" text-anchor="middle">AdoptionClient</text><text class="sub" x="135" y="104" text-anchor="middle">src/consumers/</text></g>
+        <g class="n" id="n2"><rect class="box" x="300" y="60" width="150" height="60" rx="10" fill="var(--consumer-soft)" stroke="var(--consumer)"/><text class="lbl" x="375" y="86" text-anchor="middle">Pact mock server</text><text class="sub" x="375" y="104" text-anchor="middle" id="t-n2">answers as agreed</text></g>
+        <g class="n" id="n3"><rect class="box" x="40" y="170" width="190" height="60" rx="10" fill="var(--consumer-soft)" stroke="var(--consumer)"/><text class="lbl" x="135" y="196" text-anchor="middle" id="t-n3">consumer test ✓</text><text class="sub" x="135" y="214" text-anchor="middle">5 interactions</text></g>
+        <g class="n" id="n4"><rect class="box" x="420" y="110" width="160" height="90" rx="10" fill="var(--pact-soft)" stroke="var(--pact)"/><text class="lbl" x="500" y="142" text-anchor="middle">PetAdoptionWeb-</text><text class="lbl" x="500" y="160" text-anchor="middle">Petstore.json</text><text class="sub" x="500" y="182" text-anchor="middle">pact spec v3</text></g>
+        <g class="n" id="n5"><rect class="box" x="760" y="60" width="200" height="60" rx="10" fill="var(--provider-soft)" stroke="var(--provider)"/><text class="lbl" x="860" y="86" text-anchor="middle" id="t-n5">state handler</text><text class="sub" x="860" y="104" text-anchor="middle">given "a pet exists"</text></g>
+        <g class="n" id="n6"><rect class="box" x="760" y="165" width="200" height="70" rx="10" fill="var(--provider-soft)" stroke="var(--provider)"/><text class="lbl" x="860" y="192" text-anchor="middle">Petstore :8090</text><text class="sub" x="860" y="210" text-anchor="middle">Verifier replays requests</text></g>
+        <g class="n" id="n7"><rect class="box" x="420" y="240" width="160" height="44" rx="10" fill="var(--ok-soft)" stroke="var(--ok)"/><text class="lbl" x="500" y="267" text-anchor="middle" id="t-n7">5/5 verified ✓</text></g>
+      </svg>
+    </div>
+    <div class="cap" id="cap"></div>
+  </section>
+
+  <section class="station">
+    <header>
+      <span class="eyebrow" lang="ru">Что именно в контракте</span><span class="eyebrow" lang="en">What is in the contract</span>
+      <h2 lang="ru">Пять взаимодействий, на которые опирается клиент</h2><h2 lang="en">Five interactions the client relies on</h2>
+      <p class="muted" lang="ru">Для каждого видно три вещи: что пишет клиент, что попало в pact-файл и как поставщик готовит данные перед проверкой. Всё взято из настоящего файла <code>pacts/PetAdoptionWeb-Petstore.json</code>.</p>
+      <p class="muted" lang="en">For each one: what the client code does, what went into the pact file, and how the provider prepares data before verification. Taken from the real <code>pacts/PetAdoptionWeb-Petstore.json</code>.</p>
+    </header>
+    <div class="ix">
+      <div class="ilist" id="ilist"></div>
+      <div class="idetail" id="idetail"></div>
+    </div>
+  </section>
+
+  <section class="station">
+    <header>
+      <span class="eyebrow" lang="ru">Зачем это всё</span><span class="eyebrow" lang="en">Why bother</span>
+      <h2 lang="ru">Что будет, если…</h2><h2 lang="en">What happens if…</h2>
+      <p class="muted" lang="ru">Pact проверяет только то, что клиент действительно использует. Поэтому одни изменения поставщика безопасны, а другие ломают конкретного клиента. Выберите изменение.</p>
+      <p class="muted" lang="en">Pact checks only what the client actually uses, so some provider changes are safe and others break this particular client. Pick a change.</p>
+    </header>
+    <div class="whatif">
+      <div class="opts" id="opts"></div>
+      <div class="result" id="result"></div>
+    </div>
+  </section>
+
+  <section class="station">
+    <header>
+      <span class="eyebrow" lang="ru">Как это устроено в репозитории</span><span class="eyebrow" lang="en">How it is set up</span>
+      <h2 lang="ru">Два проекта Playwright и самопроверка</h2><h2 lang="en">Two Playwright projects and a self-test</h2>
+    </header>
+    <div class="cards">
+      <div class="card" style="border-top:4px solid var(--consumer)"><span class="eyebrow">contract-consumer</span><h3 lang="ru">Сторона клиента</h3><h3 lang="en">Consumer side</h3><p lang="ru">Настоящий код клиента ходит в Pact mock server. Сеть и Petstore не нужны, тесты занимают миллисекунды. На выходе — pact-файл.</p><p lang="en">The real client code talks to a Pact mock server. No network, no Petstore, milliseconds. The output is the pact file.</p><code class="muted">tests/contract-consumer/</code></div>
+      <div class="card" style="border-top:4px solid var(--provider)"><span class="eyebrow">contract-provider</span><h3 lang="ru">Сторона поставщика</h3><h3 lang="en">Provider side</h3><p lang="ru">Запускается после клиента. State handlers создают или удаляют нужного питомца, Verifier проигрывает каждый запрос против Docker-копии Petstore.</p><p lang="en">Runs after the consumer. State handlers create or delete the pet each interaction needs; the Verifier replays every request against the Petstore container.</p><code class="muted">tests/contract-provider/</code></div>
+      <div class="card" style="border-top:4px solid var(--ok)"><span class="eyebrow" lang="ru">самопроверка</span><span class="eyebrow" lang="en">self-test</span><h3 lang="ru">Невыполнимый контракт отклоняется</h3><h3 lang="en">An impossible contract is rejected</h3><p lang="ru">Тест подменяет одно ожидание: клиент якобы читает поле <code>adoptedAt</code>, которого у Petstore нет. Verifier обязан упасть, иначе зелёная проверка ничего бы не доказывала.</p><p lang="en">The test changes one expectation: the client supposedly reads <code>adoptedAt</code>, which Petstore does not have. The Verifier must fail, or a green run would prove nothing.</p><code class="muted">BrokenExpectations-Petstore.json</code></div>
+    </div>
+    <p class="muted" lang="ru">Первый прогон в CI 17.10.2026: 185 тестов прошли, из них 7 — Pact (5 клиентских, проверка поставщика 5/5 и самопроверка). Pact-файл публикуется на GitHub Pages в <code>/pact/</code>.</p>
+    <p class="muted" lang="en">First CI run on 17.10.2026: 185 tests passed, 7 of them Pact (5 consumer, provider verification 5/5, self-test). The pact file is published to GitHub Pages under <code>/pact/</code>.</p>
+  </section>
+
+  <section class="station">
+    <header>
+      <span class="eyebrow" lang="ru">Три контрактных инструмента вместе</span><span class="eyebrow" lang="en">Three contract tools together</span>
+      <h2 lang="ru">Pact, oasdiff и Schemathesis</h2><h2 lang="en">Pact, oasdiff and Schemathesis</h2>
+    </header>
+    <div class="compare">
+      <table class="cmp">
+        <thead><tr><th></th><th class="hl">Pact</th><th>oasdiff</th><th>Schemathesis</th></tr></thead>
+        <tbody>
+          <tr><td lang="ru">Источник правды</td><td lang="en">Source of truth</td><td class="hl"><span lang="ru">ожидания реального клиента</span><span lang="en">a real client's expectations</span></td><td><span lang="ru">утверждённая OpenAPI-спека</span><span lang="en">the approved OpenAPI spec</span></td><td><span lang="ru">OpenAPI-спека</span><span lang="en">the OpenAPI spec</span></td></tr>
+          <tr><td lang="ru">Вопрос</td><td lang="en">Question</td><td class="hl"><span lang="ru">сломает ли поставщик именно этого клиента?</span><span lang="en">will the provider break this client?</span></td><td><span lang="ru">ломает ли новая версия спеки клиентов вообще?</span><span lang="en">does the new spec break clients at all?</span></td><td><span lang="ru">делает ли сервер то, что написано в спеке?</span><span lang="en">does the server do what the spec says?</span></td></tr>
+          <tr><td lang="ru">Проверяет</td><td lang="en">Checks</td><td class="hl"><span lang="ru">только используемые поля и запросы</span><span lang="en">only the fields and calls in use</span></td><td><span lang="ru">весь документ</span><span lang="en">the whole document</span></td><td><span lang="ru">все операции, тысячи запросов</span><span lang="en">every operation, thousands of requests</span></td></tr>
+          <tr><td lang="ru">Наша находка</td><td lang="en">Our finding</td><td class="hl"><span lang="ru">5/5: старый образ 1.0.17 устраивает этого клиента</span><span lang="en">5/5: the old 1.0.17 image satisfies this client</span></td><td>CD-1</td><td>FZ-1 … FZ-8</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" lang="ru">Обратите внимание: oasdiff нашёл, что в спецификации контейнера у <code>POST /pet/{petId}</code> нет ответа 200, а Pact показывает, что сервер на деле отвечает 200 и клиенту этого хватает. Документ и поведение — разные вещи, поэтому инструментов три.</p>
+    <p class="muted" lang="en">Note: oasdiff found the container spec has no 200 response for <code>POST /pet/{petId}</code>, yet Pact shows the server does answer 200 and the client is fine with it. A document and behaviour are different things, which is why there are three tools.</p>
+  </section>
+
+  <section class="station">
+    <header>
+      <span class="eyebrow" lang="ru">Следующий уровень</span><span class="eyebrow" lang="en">Next level</span>
+      <h2 lang="ru">Pact Broker и can-i-deploy</h2><h2 lang="en">Pact Broker and can-i-deploy</h2>
+      <p lang="ru">Здесь клиент и поставщик живут в одном репозитории, поэтому pact-файл передаётся через папку. В реальной компании это разные команды и репозитории: клиент публикует контракт в Pact Broker (или PactFlow), сборка поставщика забирает его оттуда, а перед деплоем команда <code>can-i-deploy</code> проверяет, совместимы ли версии в нужном окружении. У нас этого пока нет — это следующий шаг.</p>
+      <p lang="en">Here consumer and provider live in one repository, so the pact file travels through a folder. In a real company they are separate teams and repositories: the consumer publishes the contract to a Pact Broker (or PactFlow), the provider build fetches it from there, and before deploy <code>can-i-deploy</code> checks that the versions are compatible in the target environment. We do not have that yet; it is the next step.</p>
+    </header>
+  </section>
+
+  <section class="station">
+    <header>
+      <span class="eyebrow" lang="ru">Запуск</span><span class="eyebrow" lang="en">Run it</span>
+      <h2 lang="ru">Команды</h2><h2 lang="en">Commands</h2>
+    </header>
+    <div class="card" id="cmds"></div>
+  </section>
+
+  <section class="station">
+    <header><span class="eyebrow" lang="ru">Словарь</span><span class="eyebrow" lang="en">Glossary</span><h2 lang="ru">Термины</h2><h2 lang="en">Terms</h2></header>
+    <dl class="terms" id="glossary"></dl>
+  </section>
+
+  <footer>
+    <a href="https://github.com/NailKarimov/api-test-automation/blob/main/docs/pact.md">docs/pact.md</a>
+    <a href="https://nailkarimov.github.io/api-test-automation/pact/PetAdoptionWeb-Petstore.json" lang="ru">Pact-файл последнего прогона</a>
+    <a href="https://nailkarimov.github.io/api-test-automation/pact/PetAdoptionWeb-Petstore.json" lang="en">Latest pact file</a>
+    <a href="https://docs.pact.io">docs.pact.io</a>
+    <span>@pact-foundation/pact 17.1.4 · 17.10.2026</span>
+  </footer>
+</div>
+
+<script>
+const S = { lang: 'ru', step: -1, timer: null, ix: 1, what: 'rename' };
+const L = (ru, en) => (S.lang === 'ru' ? ru : en);
+
+const STEPS = [
+  { on: ['n1'], edges: [], c: '--consumer', ru: 'Клиентский тест вызывает настоящий AdoptionClient, например getPet(2026101701).', en: 'The consumer test calls the real AdoptionClient, e.g. getPet(2026101701).' },
+  { on: ['n1', 'n2'], edges: ['e1'], c: '--consumer', ru: 'Запрос уходит не в Petstore, а в Pact mock server. Он отвечает ровно так, как описано в тесте: id, name, status.', en: 'The request goes to the Pact mock server, not Petstore. It answers exactly as the test describes: id, name, status.' },
+  { on: ['n1', 'n2', 'n3'], edges: ['e1'], c: '--consumer', ru: 'Клиент разобрал ответ, проверка прошла. Значит, клиент действительно работает с таким ответом.', en: 'The client parsed the response and the assertion passed: the client really works with this response.' },
+  { on: ['n3', 'n4'], edges: ['e2'], c: '--pact', ru: 'Pact записывает взаимодействие в файл: состояние, запрос, ответ и правила сравнения («любое целое», «строка как эта»).', en: 'Pact writes the interaction to the file: state, request, response and matching rules ("any integer", "a string like this").' },
+  { on: ['n4', 'n5'], edges: ['e3'], c: '--provider', ru: 'Проверка поставщика читает файл. Для «given a pet exists» state handler создаёт питомца 2026101701 в контейнере.', en: 'Provider verification reads the file. For "given a pet exists" the state handler creates pet 2026101701 in the container.' },
+  { on: ['n5', 'n6'], edges: ['e4'], c: '--provider', ru: 'Verifier шлёт тот же запрос в Petstore :8090 и сравнивает ответ с правилами из контракта.', en: 'The Verifier sends the same request to Petstore :8090 and compares the response with the contract rules.' },
+  { on: ['n6', 'n7', 'n4'], edges: ['e5'], c: '--ok', ru: 'Все 5 взаимодействий выполнены: этот Petstore можно выкатывать, Pet Adoption Web не сломается.', en: 'All 5 interactions satisfied: this Petstore can ship and Pet Adoption Web will not break.' },
+];
+function go(i) {
+  S.step = i;
+  document.querySelectorAll('.n').forEach((n) => n.classList.remove('on'));
+  document.querySelectorAll('.edge').forEach((e) => { e.classList.remove('on'); e.style.stroke = ''; });
+  const st = STEPS[i];
+  if (!st) { document.getElementById('cap').textContent = L('Нажмите «Показать по шагам».', 'Press "Play step by step".'); document.getElementById('stepno').textContent = ''; document.querySelectorAll('.n').forEach((n) => n.classList.add('on')); return; }
+  st.on.forEach((id) => document.getElementById(id).classList.add('on'));
+  st.edges.forEach((id) => { const e = document.getElementById(id); e.classList.add('on'); e.style.stroke = `var(${st.c})`; });
+  document.getElementById('cap').innerHTML = `<b>${i + 1}/${STEPS.length}</b>${L(st.ru, st.en)}`;
+  document.getElementById('stepno').textContent = `${i + 1} / ${STEPS.length}`;
+}
+function stop() { clearInterval(S.timer); S.timer = null; }
+document.getElementById('next').addEventListener('click', () => { stop(); go((S.step + 1) % STEPS.length); });
+document.getElementById('play').addEventListener('click', () => {
+  stop(); go(0);
+  S.timer = setInterval(() => { if (S.step >= STEPS.length - 1) return stop(); go(S.step + 1); }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 500 : 2200);
+});
+
+/* From pacts/PetAdoptionWeb-Petstore.json, CI run 17.10.2026 */
+const IX = [
+  { name: ['Список для главной', 'Home page list'], method: 'GET', path: '/pet/findByStatus?status=available',
+    client: 'listAdoptable()\n→ [{ id, name, photo: photoUrls[0] }]',
+    pact: '<span class="k">given</span> there are available pets\nGET /pet/findByStatus\n  ?status=available\n← 200 eachLike({\n    id: integer(1),\n    name: like("doggie"),\n    photoUrls: eachLike("…")\n  })',
+    state: ['создать питомца со статусом available', 'create a pet with status available'], reads: ['id', 'name', 'photoUrls[0]'] },
+  { name: ['Страница питомца', 'Pet page'], method: 'GET', path: '/pet/2026101701',
+    client: 'getPet(2026101701)\n→ { id, name, status }',
+    pact: '<span class="k">given</span> a pet exists\n  {id: 2026101701, name: "Rex"}\nGET /pet/2026101701\n← 200 {\n    id: integer,\n    name: like("Rex"),\n    status: regex(available|pending|sold)\n  }',
+    state: ['POST /pet с id 2026101701 и именем Rex', 'POST /pet with id 2026101701, name Rex'], reads: ['id', 'name', 'status'] },
+  { name: ['«Не найдено»', '"Not found"'], method: 'GET', path: '/pet/2026101799',
+    client: 'getPet(2026101799)\n→ undefined (404)',
+    pact: '<span class="k">given</span> a pet does not exist\n  {id: 2026101799}\nGET /pet/2026101799\n← 404',
+    state: ['DELETE /pet/2026101799, ошибку игнорировать', 'DELETE /pet/2026101799, ignore errors'], reads: [L('только код 404', 'status 404 only')] },
+  { name: ['Кнопка «Забронировать»', '"Reserve" button'], method: 'POST', path: '/pet/2026101701?name=Rex&status=pending',
+    client: 'reserve({ id, name })\n→ { status: "pending" }',
+    pact: '<span class="k">given</span> a pet exists\nPOST /pet/2026101701\n  ?name=Rex&status=pending\n← 200 {\n    id: integer, name: like,\n    status: "pending"   // exact\n  }',
+    state: ['POST /pet с id 2026101701', 'POST /pet with id 2026101701'], reads: ['status = pending'] },
+  { name: ['Форма приюта', 'Shelter form'], method: 'POST', path: '/pet',
+    client: 'register({ id, name, photo })\n→ id',
+    pact: '<span class="k">given</span> a pet does not exist\n  {id: 2026101702}\nPOST /pet\n  { id, name: "Bella",\n    photoUrls: [...], status }\n← 200 like({ id: 2026101702 })',
+    state: ['DELETE /pet/2026101702', 'DELETE /pet/2026101702'], reads: ['id'] },
+];
+function renderIx() {
+  const list = document.getElementById('ilist');
+  list.innerHTML = IX.map((x, i) => `<button type="button" id="ix-${i}" aria-pressed="${i === S.ix}">${L(...x.name)}<small>${x.method} ${x.path}</small></button>`).join('');
+  list.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { S.ix = Number(b.id.slice(3)); renderIx(); }));
+  const x = IX[S.ix];
+  document.getElementById('idetail').innerHTML = `
+    <div class="col" style="--c:var(--consumer)"><span class="eyebrow">${L('1 · код клиента', '1 · client code')}</span><pre>${x.client}</pre><div>${L('Читает', 'Reads')}: ${x.reads.map((r) => `<span class="chip">${r}</span>`).join('')}</div></div>
+    <div class="col" style="--c:var(--pact)"><span class="eyebrow">${L('2 · в pact-файле', '2 · in the pact file')}</span><pre>${x.pact}</pre></div>
+    <div class="col" style="--c:var(--provider)"><span class="eyebrow">${L('3 · state handler', '3 · state handler')}</span><p style="font-size:14px">${L(...x.state)}</p><p class="muted" style="font-size:13px">${L('Затем Verifier шлёт запрос в контейнер и сравнивает ответ с правилами.', 'Then the Verifier sends the request to the container and compares the answer with the rules.')}</p></div>`;
+}
+
+const IXN = IX.map((x) => x.name);
+const WHAT = {
+  add: { t: ['Поставщик добавил поле nickname', 'Provider adds a nickname field'], res: [1, 1, 1, 1, 1],
+    v: ['Зелёно. Клиент не читает nickname, а правила Pact допускают лишние поля в ответе.', 'Green. The client does not read nickname, and Pact rules allow extra response fields.'] },
+  rename: { t: ['Поставщик переименовал name → title', 'Provider renames name → title'], res: [0, 0, 1, 0, 1],
+    v: ['Красно: 3 из 5. Сломаются список, страница питомца и бронирование. Регистрация и «не найдено» имя не читают, поэтому проходят.', 'Red: 3 of 5 fail. The list, the pet page and reserve break. Register and "not found" do not read the name, so they pass.'] },
+  status: { t: ['Поставщик убрал photoUrls из ответа', 'Provider drops photoUrls from responses'], res: [0, 1, 1, 1, 1],
+    v: ['Красно: 1 из 5. Только главная страница берёт фото, остальным оно не нужно. oasdiff пометил бы это изменение для всех клиентов, а Pact показывает, кого именно оно задевает.', 'Red: 1 of 5. Only the home page uses the photo. oasdiff would flag this for every client; Pact shows exactly whom it hits.'] },
+  read: { t: ['Клиент начал читать category.name', 'Client starts reading category.name'], res: null,
+    v: ['Сначала меняется клиентский тест: новое ожидание попадает в pact-файл. Проверка поставщика покажет, отдаёт ли Petstore category — до того, как клиент уйдёт в прод.', 'The consumer test changes first and the new expectation lands in the pact file. Provider verification then shows whether Petstore returns category, before the client ships.'] },
+  v404: { t: ['Поставщик стал отвечать 200 с пустым телом вместо 404', 'Provider answers 200 with an empty body instead of 404'], res: [1, 1, 0, 1, 1],
+    v: ['Красно: 1 из 5. Страница «не найдено» полагается на 404. Обычная схема ответа это не поймает, а Pact — да.', 'Red: 1 of 5. The "not found" page relies on 404. A plain response schema would not catch it; Pact does.'] },
+};
+function renderWhat() {
+  const o = document.getElementById('opts');
+  o.innerHTML = Object.entries(WHAT).map(([k, w]) => `<button type="button" id="w-${k}" aria-pressed="${k === S.what}">${L(...w.t)}</button>`).join('');
+  o.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { S.what = b.id.slice(2); renderWhat(); }));
+  const w = WHAT[S.what];
+  const rows = w.res ? IXN.map((n, i) => `<div class="row ${w.res[i] ? 'ok' : 'bad'}"><i>${w.res[i] ? '✓' : '✗'}</i><span>${L(...n)}</span></div>`).join('') : '';
+  const ok = w.res ? w.res.every(Boolean) : true;
+  document.getElementById('result').innerHTML = `<span class="eyebrow">${L('Проверка поставщика', 'Provider verification')}</span><div class="rows">${rows}</div>` +
+    (w.res ? `<div class="verdict ${ok ? 'ok' : 'bad'}">${ok ? L('Можно выкатывать', 'Safe to deploy') : L('Нельзя выкатывать: клиент сломается', 'Do not deploy: the client breaks')}</div>` : '') +
+    `<p style="font-size:14.5px">${L(...w.v)}</p>`;
+}
+const CMDS = [
+  ['npm run test:contract', 'клиент + поставщик (нужен контейнер)', 'consumer + provider (needs the container)'],
+  ['npm run fuzz:up', 'поднять Docker-копию Petstore на :8090', 'start the Petstore container on :8090'],
+  ['npx playwright test --project=contract-consumer', 'только клиентская часть, без сети', 'consumer only, no network'],
+];
+function renderCmds() {
+  document.getElementById('cmds').innerHTML = CMDS.map((c, i) => `<div style="display:grid;gap:4px"><span class="eyebrow">${L(c[1], c[2])}</span><div class="cmd"><code>${c[0]}</code><button type="button" id="cp-${i}" data-c="${c[0]}">${L('Копировать', 'Copy')}</button></div></div>`).join('');
+  document.querySelectorAll('.cmd button').forEach((b) => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.dataset.c); b.textContent = L('Скопировано', 'Copied'); }
+    catch (e) { const r = document.createRange(); r.selectNodeContents(b.previousElementSibling); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  }));
+}
+const TERMS = [
+  ['Consumer-driven contract', 'Контракт составляет клиент: он записывает, что ему на самом деле нужно, и поставщик обязан это выполнять.', 'The client writes the contract: it records what it actually needs, and the provider must satisfy it.'],
+  ['Consumer / Provider', 'Потребитель вызывает API (у нас Pet Adoption Web), поставщик его реализует (Petstore).', 'The consumer calls the API (Pet Adoption Web here); the provider implements it (Petstore).'],
+  ['Interaction', 'Одна пара «запрос → ожидаемый ответ» в контракте.', 'One request → expected response pair in the contract.'],
+  ['Provider state', 'Предусловие взаимодействия («питомец существует»). Поставщик готовит его через state handler перед проверкой.', 'An interaction\'s precondition ("a pet exists"). The provider sets it up in a state handler before verification.'],
+  ['Matchers', 'Правила сравнения вместо точных значений: integer(), like(), eachLike(), regex(). Контракт фиксирует форму, а не конкретные данные.', 'Matching rules instead of exact values: integer(), like(), eachLike(), regex(). The contract fixes the shape, not the data.'],
+  ['Mock server', 'Поддельный сервер Pact на стороне клиента. Отвечает по контракту и записывает, что у него спросили.', 'Pact\'s fake server on the consumer side. Answers per the contract and records what was asked.'],
+  ['Provider verification', 'Проигрывание pact-файла против настоящего поставщика.', 'Replaying the pact file against the real provider.'],
+  ['Pact Broker / can-i-deploy', 'Хранилище контрактов между командами и команда, которая отвечает, можно ли выкатывать версию.', 'A contract store shared between teams, and the command that answers whether a version can ship.'],
+];
+function renderTerms() { document.getElementById('glossary').innerHTML = TERMS.map((x) => `<div><dt>${x[0]}</dt><dd>${L(x[1], x[2])}</dd></div>`).join(''); }
+
+function renderAll() {
+  IX[2].reads = [L('только код 404', 'status 404 only')];
+  document.getElementById('t-side-c').textContent = L('КЛИЕНТ (consumer)', 'CONSUMER');
+  document.getElementById('t-side-p').textContent = L('ПОСТАВЩИК (provider)', 'PROVIDER');
+  go(S.step); renderIx(); renderWhat(); renderCmds(); renderTerms();
+}
+function setLang(l) {
+  S.lang = l; document.body.dataset.lang = l; document.documentElement.lang = l;
+  document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.l === l)));
+  try { localStorage.setItem('pact-lang', l); } catch (e) {}
+  renderAll();
+}
+document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.l)));
+let start = 'ru';
+try { start = localStorage.getItem('pact-lang') || document.documentElement.dataset.defaultLang || 'ru'; } catch (e) {}
+setLang(start);
+</script>
+
+</body>
+</html>
