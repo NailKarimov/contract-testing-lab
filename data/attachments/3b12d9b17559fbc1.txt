@@ -1,0 +1,42 @@
+
+Verifying a pact between PetAdoptionWeb and Petstore
+
+  a request for a missing pet (0s loading, 62ms verification)
+     Given a pet does not exist
+    returns a response which
+      has status code 404 (OK)
+      has a matching body (OK)
+
+  a request for an existing pet (0s loading, 60ms verification)
+     Given a pet exists
+    returns a response which
+      has status code 200 (OK)
+      includes headers
+        "Content-Type" with value "application/json" (OK)
+      has a matching body (OK)
+
+  a request for available pets (0s loading, 24ms verification)
+     Given there are available pets
+    returns a response which
+      has status code 200 (OK)
+      includes headers
+        "Content-Type" with value "application/json" (OK)
+      has a matching body (OK)
+
+  a request to register a pet (0s loading, 16ms verification)
+     Given a pet does not exist
+    returns a response which
+      has status code 200 (OK)
+      includes headers
+        "Content-Type" with value "application/json" (OK)
+      has a matching body (OK)
+
+  a request to reserve a pet (0s loading, 21ms verification)
+     Given a pet exists
+    returns a response which
+      has status code 200 (OK)
+      includes headers
+        "Content-Type" with value "application/json" (OK)
+      has a matching body (OK)
+
+
