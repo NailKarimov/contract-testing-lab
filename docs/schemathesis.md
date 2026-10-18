@@ -1,7 +1,7 @@
 # Property-based API testing with Schemathesis
 
 Visual version of this page (diagrams, animation, glossary): [`docs/schemathesis.html`](schemathesis.html) —
-open it in a browser or on [GitHub Pages](https://nailkarimov.github.io/api-test-automation/schemathesis.html).
+open it in a browser or on [GitHub Pages](https://nailkarimov.github.io/contract-testing-lab/schemathesis.html).
 
 ## What it is
 
@@ -21,13 +21,13 @@ methods, and mismatches between the documentation and the real server (**contrac
 
 ## Where it sits in this repository
 
-|                   | Playwright tests (`tests/petstore`)                       | Schemathesis (`fuzz/`)                                |
-| ----------------- | --------------------------------------------------------- | ----------------------------------------------------- |
-| Who writes a case | an engineer, from requirements and test design techniques | the tool, from the OpenAPI document                   |
-| Oracle            | exact expected values (this pet, this status)             | general properties (no 5xx, conforms to the schema)   |
-| Number of cases   | tens                                                      | thousands per run                                     |
-| Strong at         | business rules, scenarios, readable regression            | edge inputs, spec vs. server mismatches, unknown bugs |
-| System under test | public sandbox `petstore3.swagger.io`                     | private container `swaggerapi/petstore3` on `:8090`   |
+|                   | Playwright tests ([api-test-automation](https://github.com/NailKarimov/api-test-automation), `tests/petstore`) | Schemathesis (`fuzz/`)                                |
+| ----------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Who writes a case | an engineer, from requirements and test design techniques                                                      | the tool, from the OpenAPI document                   |
+| Oracle            | exact expected values (this pet, this status)                                                                  | general properties (no 5xx, conforms to the schema)   |
+| Number of cases   | tens                                                                                                           | thousands per run                                     |
+| Strong at         | business rules, scenarios, readable regression                                                                 | edge inputs, spec vs. server mismatches, unknown bugs |
+| System under test | public sandbox `petstore3.swagger.io`                                                                          | private container `swaggerapi/petstore3` on `:8090`   |
 
 The two complement each other: Schemathesis has no idea what a "sold pet" means for the business, and a
 person would never think of sending a `TRACE` request with a 10 KB unicode tag name.
@@ -76,7 +76,7 @@ failure identities, and after recording the baseline the next two runs exited wi
 
 The Petstore demo has real defects (see the findings below). Fixing them is not our job, but they must not hide
 _new_ problems. Schemathesis solves this with a **baseline** file — the same idea as `test.fail()` with a
-`DEF-n` id in the Playwright tests:
+`DEF-n` id in the Playwright tests of [api-test-automation](https://github.com/NailKarimov/api-test-automation):
 
 - every failure has an identity: operation + check + failure type + signature;
 - a failure listed in `fuzz/baseline.json` is reported as _known_ and does not fail the run;
@@ -93,7 +93,7 @@ build green without reading what changed.
 In CI — `.github/workflows/fuzz.yml`: on every push that touches `fuzz/` or `infra/petstore/`, nightly at
 03:30 UTC, and manually. The run page shows a summary table and an annotation per new failure with a `curl`
 to reproduce it; the HTML report is published to
-[`/fuzz/`](https://nailkarimov.github.io/api-test-automation/fuzz/) on GitHub Pages.
+[`/fuzz/`](https://nailkarimov.github.io/contract-testing-lab/fuzz/) on GitHub Pages.
 
 Locally (Docker Desktop and Python 3.10+):
 
@@ -133,8 +133,8 @@ curl -X POST -H 'Content-Type: application/x-www-form-urlencoded' \
 # → 500 {"code":500,"message":"There was an error processing your request. ..."}
 ```
 
-What the hand-written suite already knew: the 500s on store and user writes (DEF-n in `test-report.md`) and the
-security header findings (SEC-n). New from Schemathesis: FZ-2 … FZ-8 — mostly **contract drift**, which a
+What the hand-written suite in [api-test-automation](https://github.com/NailKarimov/api-test-automation) already
+knew: the DEF-n defects and the security header findings (SEC-n) in its `docs/test-report.md`. New from Schemathesis: FZ-2 … FZ-8 — mostly **contract drift**, which a
 person rarely checks operation by operation.
 
 ## Limits

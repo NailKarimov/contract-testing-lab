@@ -1,7 +1,7 @@
 # Contract drift with oasdiff
 
 Visual version (live diff of the four comparisons, "what breaks a client" grid, CI flow, glossary, RU/EN):
-[`docs/contract-drift.html`](https://nailkarimov.github.io/api-test-automation/contract-drift.html).
+[`docs/contract-drift.html`](https://nailkarimov.github.io/contract-testing-lab/contract-drift.html).
 
 ## What it is
 
@@ -54,7 +54,7 @@ The workflow runs four checks:
    changes without us and must not fail our build.
 
 The job summary shows both comparisons in Markdown; the HTML changelogs are published to
-[`/contract/`](https://nailkarimov.github.io/api-test-automation/contract/) on GitHub Pages.
+[`/contract/`](https://nailkarimov.github.io/contract-testing-lab/contract/) on GitHub Pages.
 
 ## Findings of the first run (17.10.2026, oasdiff v1.33.0)
 

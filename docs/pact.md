@@ -1,7 +1,7 @@
 # Consumer-driven contract tests with Pact
 
 Visual version (step-by-step handshake, the five interactions, "what happens if…" simulator, RU/EN):
-[`docs/pact.html`](https://nailkarimov.github.io/api-test-automation/pact.html).
+[`docs/pact.html`](https://nailkarimov.github.io/contract-testing-lab/pact.html).
 
 ## What it is
 
