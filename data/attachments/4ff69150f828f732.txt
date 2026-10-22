@@ -7,7 +7,7 @@ Verifying a pact between BrokenExpectations and Petstore
       has status code 404 (OK)
       has a matching body (OK)
 
-  a request for an existing pet (0s loading, 18ms verification)
+  a request for an existing pet (0s loading, 16ms verification)
      Given a pet exists
     returns a response which
       has status code 200 (OK)
@@ -15,7 +15,7 @@ Verifying a pact between BrokenExpectations and Petstore
         "Content-Type" with value "application/json" (OK)
       has a matching body (FAILED)
 
-  a request for available pets (0s loading, 19ms verification)
+  a request for available pets (0s loading, 16ms verification)
      Given there are available pets
     returns a response which
       has status code 200 (OK)
@@ -23,7 +23,7 @@ Verifying a pact between BrokenExpectations and Petstore
         "Content-Type" with value "application/json" (OK)
       has a matching body (OK)
 
-  a request to register a pet (0s loading, 18ms verification)
+  a request to register a pet (0s loading, 15ms verification)
      Given a pet does not exist
     returns a response which
       has status code 200 (OK)
@@ -31,7 +31,7 @@ Verifying a pact between BrokenExpectations and Petstore
         "Content-Type" with value "application/json" (OK)
       has a matching body (OK)
 
-  a request to reserve a pet (0s loading, 19ms verification)
+  a request to reserve a pet (0s loading, 15ms verification)
      Given a pet exists
     returns a response which
       has status code 200 (OK)
@@ -48,5 +48,5 @@ Failures:
 
 There were 1 pact failures
 
-[08:08:33.031] ERROR (2863): pact-core@20.2.0: Verification unsuccessful
+[08:08:52.192] ERROR (2922): pact-core@20.2.0: Verification unsuccessful
 
