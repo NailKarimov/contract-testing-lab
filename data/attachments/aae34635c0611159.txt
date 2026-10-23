@@ -1,21 +1,21 @@
 
-Verifying a pact between PetAdoptionWeb and Petstore
+Verifying a pact between BrokenExpectations and Petstore
 
-  a request for a missing pet (0s loading, 58ms verification)
+  a request for a missing pet (0s loading, 20ms verification)
      Given a pet does not exist
     returns a response which
       has status code 404 (OK)
       has a matching body (OK)
 
-  a request for an existing pet (0s loading, 52ms verification)
+  a request for an existing pet (0s loading, 16ms verification)
      Given a pet exists
     returns a response which
       has status code 200 (OK)
       includes headers
         "Content-Type" with value "application/json" (OK)
-      has a matching body (OK)
+      has a matching body (FAILED)
 
-  a request for available pets (0s loading, 20ms verification)
+  a request for available pets (0s loading, 21ms verification)
      Given there are available pets
     returns a response which
       has status code 200 (OK)
@@ -31,7 +31,7 @@ Verifying a pact between PetAdoptionWeb and Petstore
         "Content-Type" with value "application/json" (OK)
       has a matching body (OK)
 
-  a request to reserve a pet (0s loading, 17ms verification)
+  a request to reserve a pet (0s loading, 18ms verification)
      Given a pet exists
     returns a response which
       has status code 200 (OK)
@@ -39,4 +39,14 @@ Verifying a pact between PetAdoptionWeb and Petstore
         "Content-Type" with value "application/json" (OK)
       has a matching body (OK)
 
+
+Failures:
+
+1) Verifying a pact between BrokenExpectations and Petstore Given a pet exists - a request for an existing pet
+    1.1) has a matching body
+           $ -> Actual map is missing the following keys: adoptedAt
+
+There were 1 pact failures
+
+[08:06:57.449] ERROR (3111): pact-core@20.2.0: Verification unsuccessful
 
