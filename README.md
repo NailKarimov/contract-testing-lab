@@ -42,6 +42,8 @@ which runs as a **private Docker container**. Each tool answers a different ques
 
 ## Findings
 
+Each defect is also a bug report in [Issues](https://github.com/NailKarimov/contract-testing-lab/issues?q=is%3Aissue+label%3Abug), with steps, expected and actual results and severity.
+
 | ID   | Found by     | Summary                                                                                                 |
 | ---- | ------------ | ------------------------------------------------------------------------------------------------------- |
 | FZ-1 | Schemathesis | answers **500** to unexpected input (form-encoded bodies, `complete=0.5`, odd unicode) instead of a 4xx |
