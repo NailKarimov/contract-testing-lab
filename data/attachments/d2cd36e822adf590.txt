@@ -1,21 +1,21 @@
 
-Verifying a pact between PetAdoptionWeb and Petstore
+Verifying a pact between BrokenExpectations and Petstore
 
-  a request for a missing pet (0s loading, 53ms verification)
+  a request for a missing pet (0s loading, 15ms verification)
      Given a pet does not exist
     returns a response which
       has status code 404 (OK)
       has a matching body (OK)
 
-  a request for an existing pet (0s loading, 38ms verification)
+  a request for an existing pet (0s loading, 13ms verification)
      Given a pet exists
     returns a response which
       has status code 200 (OK)
       includes headers
         "Content-Type" with value "application/json" (OK)
-      has a matching body (OK)
+      has a matching body (FAILED)
 
-  a request for available pets (0s loading, 18ms verification)
+  a request for available pets (0s loading, 13ms verification)
      Given there are available pets
     returns a response which
       has status code 200 (OK)
@@ -23,7 +23,7 @@ Verifying a pact between PetAdoptionWeb and Petstore
         "Content-Type" with value "application/json" (OK)
       has a matching body (OK)
 
-  a request to register a pet (0s loading, 16ms verification)
+  a request to register a pet (0s loading, 12ms verification)
      Given a pet does not exist
     returns a response which
       has status code 200 (OK)
@@ -31,7 +31,7 @@ Verifying a pact between PetAdoptionWeb and Petstore
         "Content-Type" with value "application/json" (OK)
       has a matching body (OK)
 
-  a request to reserve a pet (0s loading, 17ms verification)
+  a request to reserve a pet (0s loading, 11ms verification)
      Given a pet exists
     returns a response which
       has status code 200 (OK)
@@ -39,4 +39,14 @@ Verifying a pact between PetAdoptionWeb and Petstore
         "Content-Type" with value "application/json" (OK)
       has a matching body (OK)
 
+
+Failures:
+
+1) Verifying a pact between BrokenExpectations and Petstore Given a pet exists - a request for an existing pet
+    1.1) has a matching body
+           $ -> Actual map is missing the following keys: adoptedAt
+
+There were 1 pact failures
+
+[14:53:55.296] ERROR (2876): pact-core@20.2.0: Verification unsuccessful
 
