@@ -4,6 +4,7 @@
 [![Fuzz](https://github.com/NailKarimov/contract-testing-lab/actions/workflows/fuzz.yml/badge.svg)](https://github.com/NailKarimov/contract-testing-lab/actions/workflows/fuzz.yml)
 [![Contract](https://github.com/NailKarimov/contract-testing-lab/actions/workflows/contract.yml/badge.svg)](https://github.com/NailKarimov/contract-testing-lab/actions/workflows/contract.yml)
 [![Allure report](https://img.shields.io/badge/report-Allure-orange)](https://nailkarimov.github.io/contract-testing-lab/)
+[![Release](https://img.shields.io/github/v/release/NailKarimov/contract-testing-lab)](https://github.com/NailKarimov/contract-testing-lab/releases)
 
 ### ▶ Open online
 
@@ -93,6 +94,8 @@ Three workflows run on push, nightly and on demand:
 - `tests.yml` at 03:00 UTC runs the Pact consumer and provider and publishes Allure;
 - `fuzz.yml` at 03:30 UTC runs Schemathesis against the container and publishes the report under `fuzz/`;
 - `contract.yml` at 03:45 UTC, and on every pull request, runs oasdiff and publishes the report under `contract/`.
+
+Releases: committing `.github/releases/<tag>.md` runs the Release workflow, which creates the tag and the GitHub release with that file as its notes.
 
 ## Documentation
 
