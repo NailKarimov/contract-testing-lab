@@ -5,6 +5,7 @@
 [![Contract](https://github.com/NailKarimov/contract-testing-lab/actions/workflows/contract.yml/badge.svg)](https://github.com/NailKarimov/contract-testing-lab/actions/workflows/contract.yml)
 [![Allure report](https://img.shields.io/badge/report-Allure-orange)](https://nailkarimov.github.io/contract-testing-lab/)
 [![Release](https://img.shields.io/github/v/release/NailKarimov/contract-testing-lab)](https://github.com/NailKarimov/contract-testing-lab/releases)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/NailKarimov/contract-testing-lab?quickstart=1)
 
 ### ▶ Open online
 
@@ -61,6 +62,8 @@ In total, 83 spec violations were found and grouped into 8 defects (FZ-1 to FZ-8
 passes 5/5.
 
 ## Running it
+
+No local setup: the **Open in GitHub Codespaces** badge starts a browser VS Code with this repository, its tools and Docker; the container runs `npm ci && pip install -r fuzz/requirements.txt` on creation, then `npm run petstore:up && npm run test:contract` works in the terminal.
 
 Requirements: Node.js 22+, Docker, Python 3.12+ (Schemathesis), the oasdiff binary, Java 17+ for a local Allure
 report.
