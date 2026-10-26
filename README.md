@@ -5,6 +5,19 @@
 [![Contract](https://github.com/NailKarimov/contract-testing-lab/actions/workflows/contract.yml/badge.svg)](https://github.com/NailKarimov/contract-testing-lab/actions/workflows/contract.yml)
 [![Allure report](https://img.shields.io/badge/report-Allure-orange)](https://nailkarimov.github.io/contract-testing-lab/)
 
+### ▶ Open online
+
+| Page                                                                                     | What it is          |
+| ---------------------------------------------------------------------------------------- | ------------------- |
+| **[Allure test report](https://nailkarimov.github.io/contract-testing-lab/)**            | latest CI run       |
+| [Schemathesis report](https://nailkarimov.github.io/contract-testing-lab/fuzz/)          | latest CI run       |
+| [Contract drift report](https://nailkarimov.github.io/contract-testing-lab/contract/)    | oasdiff, latest run |
+| [Schemathesis](https://nailkarimov.github.io/contract-testing-lab/schemathesis.html)     | interactive guide   |
+| [Contract drift](https://nailkarimov.github.io/contract-testing-lab/contract-drift.html) | interactive guide   |
+| [Pact](https://nailkarimov.github.io/contract-testing-lab/pact.html)                     | interactive guide   |
+
+Click these links: opening an `.html` file in the file list shows its source code, GitHub does not run it.
+
 Three contract-testing tools on one system, the [Swagger Petstore](https://github.com/swagger-api/swagger-petstore),
 which runs as a **private Docker container**. Each tool answers a different question about the API's contract.
 
